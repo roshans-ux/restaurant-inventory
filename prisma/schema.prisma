@@ -1,0 +1,168 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+}
+
+enum StockMovementType {
+  OPENING_BALANCE
+  RECEIVE
+  ADJUSTMENT
+  SALE
+}
+
+enum QuantityUnit {
+  ML
+  BOTTLE
+}
+
+enum AlertType {
+  LOW_STOCK
+}
+
+model Tenant {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  posWebhookSecret String?
+  apiKey           String   @unique @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  users            User[]
+  products         Product[]
+  posSales         PosSale[]
+  posMappings      PosMenuMapping[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  tenantId     String
+  email        String
+  passwordHash String
+  name         String?
+  role         UserRole @default(ADMIN)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([email])
+}
+
+model Product {
+  id               String           @id @default(uuid())
+  tenantId         String
+  name             String
+  sku              String?
+  bottleSizeMl     Decimal          @default(750)
+  defaultPourMl    Decimal          @default(30)
+  parLevelBottles  Decimal?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mappings         PosMenuMapping[]
+  reorderConfig    ReorderConfig?
+  stockMovements   StockMovement[]
+  alerts           Alert[]
+  saleLines        PosSaleLine[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+}
+
+model ReorderConfig {
+  id               String   @id @default(uuid())
+  productId        String   @unique
+  thresholdBottles Decimal  @default(1)
+  reorderQuantity  Int      @default(6)
+  notifyAdmin      Boolean  @default(true)
+  notifyVendor     Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model PosMenuMapping {
+  id        String   @id @default(uuid())
+  tenantId  String
+  productId String
+  posItemId String
+  pourMl    Decimal  @default(30)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, posItemId])
+  @@index([tenantId])
+}
+
+model PosSale {
+  id             String        @id @default(uuid())
+  tenantId       String
+  externalSaleId String
+  requestHash    String?
+  soldAt         DateTime
+  receivedAt     DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines          PosSaleLine[]
+
+  @@unique([tenantId, externalSaleId])
+  @@unique([tenantId, requestHash])
+  @@index([tenantId])
+}
+
+model PosSaleLine {
+  id             String   @id @default(uuid())
+  posSaleId      String
+  productId      String
+  externalLineId String   @unique
+  saleEventKey   String?  @unique
+  posItemId      String
+  quantity       Int
+  pourMl         Decimal
+  decrementMl    Int
+  createdAt      DateTime @default(now())
+  posSale        PosSale  @relation(fields: [posSaleId], references: [id], onDelete: Cascade)
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+model StockMovement {
+  id              String            @id @default(uuid())
+  productId       String
+  type            StockMovementType
+  quantityDeltaMl Int
+  quantityInput   Decimal?
+  quantityUnit    QuantityUnit?
+  reason          String?
+  referenceId     String?
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
+}
+
+model Alert {
+  id         String    @id @default(uuid())
+  productId  String
+  type       AlertType
+  message    String
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, type, resolvedAt])
+}

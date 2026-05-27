@@ -1,0 +1,5 @@
+[build]
+  command = "npx prisma generate && npx prisma db push && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
