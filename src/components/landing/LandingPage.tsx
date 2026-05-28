@@ -1,8 +1,5 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Link2,
@@ -37,30 +34,8 @@ const USPS = [
 ];
 
 export default function LandingPage() {
-  const [scrollY, setScrollY] = useState(0);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const onScroll = () => {
-      if (rafRef.current != null) return;
-      rafRef.current = requestAnimationFrame(() => {
-        setScrollY(window.scrollY);
-        rafRef.current = null;
-      });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
-
-  const parallax = (speed: number) => `translate3d(0, ${scrollY * speed}px, 0)`;
-
   return (
     <div className="landing-root">
-      <div className="landing-grain" aria-hidden />
-
       <header className="landing-header">
         <Link href="/" className="landing-logo">
           <Wine size={18} strokeWidth={2} />
@@ -77,16 +52,8 @@ export default function LandingPage() {
       </header>
 
       <section className="landing-hero">
-        <div
-          className="landing-parallax-layer landing-hero-glow"
-          style={{ transform: parallax(0.15) }}
-          aria-hidden
-        />
-        <div
-          className="landing-parallax-layer landing-hero-bokeh"
-          style={{ transform: parallax(0.25) }}
-          aria-hidden
-        />
+        <div className="landing-parallax-layer landing-hero-glow" aria-hidden />
+        <div className="landing-parallax-layer landing-hero-bokeh" aria-hidden />
 
         <div className="landing-hero-inner">
           <div className="landing-hero-copy">
@@ -109,20 +76,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div
-            className="landing-hero-visual"
-            style={{ transform: `${parallax(-0.08)} scale(1.02)` }}
-          >
-            <div className="landing-bottle-float landing-bottle-back" style={{ transform: parallax(-0.12) }}>
-              <Image
-                src="/images/landing/bottle-vodka.png"
-                alt=""
-                width={280}
-                height={560}
-                priority
-                className="landing-bottle-img"
-              />
-            </div>
+          <div className="landing-hero-visual">
             <div className="landing-hero-frame">
               <Image
                 src="/images/landing/hero-bottles.png"
@@ -130,6 +84,8 @@ export default function LandingPage() {
                 width={900}
                 height={506}
                 priority
+                quality={85}
+                sizes="(max-width: 900px) 100vw, 55vw"
                 className="landing-hero-img"
               />
               <div className="landing-hero-shine" aria-hidden />
@@ -144,12 +100,8 @@ export default function LandingPage() {
           <h2 className="landing-h2">Stop guessing what&apos;s left in the well.</h2>
         </div>
         <div className="landing-usp-grid">
-          {USPS.map(({ icon: Icon, title, body }, i) => (
-            <article
-              key={title}
-              className="landing-usp-card"
-              style={{ transform: parallax(-0.02 * (i + 1)) }}
-            >
+          {USPS.map(({ icon: Icon, title, body }) => (
+            <article key={title} className="landing-usp-card">
               <div className="landing-usp-icon">
                 <Icon size={20} strokeWidth={1.75} />
               </div>
@@ -161,10 +113,16 @@ export default function LandingPage() {
       </section>
 
       <section className="landing-pour">
-        <div
-          className="landing-pour-visual"
-          style={{ transform: parallax(-0.06) }}
-        >
+        <div className="landing-pour-copy">
+          <p className="landing-eyebrow">Alcohol slippage prevention</p>
+          <h2 className="landing-h2">See variance before it becomes loss.</h2>
+          <p className="landing-body">
+            When recorded pours don&apos;t match what&apos;s left in the bottle, Bar Inventory
+            surfaces the gap. Underpour and overpour adjustments keep your ledger honest — built for
+            teams that care about every 30ml.
+          </p>
+        </div>
+        <div className="landing-pour-visual">
           <div className="landing-pour-meter" aria-hidden>
             <div className="landing-pour-bar landing-pour-under">
               <Minus size={14} />
@@ -179,23 +137,10 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-        <div className="landing-pour-copy">
-          <p className="landing-eyebrow">Alcohol slippage prevention</p>
-          <h2 className="landing-h2">See variance before it becomes loss.</h2>
-          <p className="landing-body">
-            When recorded pours don&apos;t match what&apos;s left in the bottle, Bar Inventory
-            surfaces the gap. Underpour and overpour adjustments keep your ledger honest — built for
-            teams that care about every 30ml.
-          </p>
-        </div>
       </section>
 
       <section className="landing-cta-band">
-        <div
-          className="landing-cta-glow"
-          style={{ transform: parallax(0.1) }}
-          aria-hidden
-        />
+        <div className="landing-cta-glow" aria-hidden />
         <h2>Run a tighter bar, starting tonight.</h2>
         <p>Sign up, map your POS, and pour with confidence.</p>
         <Link href="/signup" className="landing-btn landing-btn-primary landing-btn-lg">

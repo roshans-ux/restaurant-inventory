@@ -16,15 +16,6 @@
   font-family: var(--landing-font-body);
 }
 
-.landing-grain {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  opacity: 0.35;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-}
-
 .landing-header {
   position: fixed;
   top: 0;
@@ -114,6 +105,7 @@
   height: 70vw;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(232, 184, 74, 0.22) 0%, transparent 65%);
+  animation: landing-glow-drift 18s ease-in-out infinite alternate;
 }
 
 .landing-hero-bokeh {
@@ -123,6 +115,25 @@
   height: 50vw;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(120, 80, 40, 0.12) 0%, transparent 70%);
+  animation: landing-bokeh-drift 22s ease-in-out infinite alternate;
+}
+
+@keyframes landing-glow-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 24px, 0);
+  }
+}
+
+@keyframes landing-bokeh-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(12px, 16px, 0);
+  }
 }
 
 .landing-hero-inner {
@@ -177,13 +188,14 @@
 
 .landing-hero-visual {
   position: relative;
-  will-change: transform;
 }
 
 .landing-hero-frame {
   position: relative;
   border-radius: 1.25rem;
   overflow: hidden;
+  aspect-ratio: 16 / 9;
+  max-height: min(52vh, 520px);
   box-shadow:
     0 40px 80px rgba(0, 0, 0, 0.55),
     0 0 0 1px rgba(255, 255, 255, 0.06);
@@ -191,9 +203,10 @@
 
 .landing-hero-img {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   object-fit: cover;
+  object-position: center 40%;
 }
 
 .landing-hero-shine {
@@ -205,22 +218,7 @@
     transparent 40%,
     transparent 100%
   );
-}
-
-.landing-bottle-float {
-  position: absolute;
-  right: -8%;
-  top: -12%;
-  width: 42%;
-  z-index: 3;
-  filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.6));
-  will-change: transform;
-}
-
-.landing-bottle-img {
-  width: 100%;
-  height: auto;
-  opacity: 0.95;
+  pointer-events: none;
 }
 
 .landing-usps {
@@ -249,14 +247,15 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.25rem;
+  align-items: stretch;
 }
 
 .landing-usp-card {
+  position: relative;
   padding: 1.75rem;
   border-radius: 1rem;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
   border: 1px solid rgba(255, 255, 255, 0.08);
-  will-change: transform;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
@@ -362,6 +361,7 @@
   margin-left: -300px;
   margin-top: -150px;
   background: radial-gradient(ellipse, rgba(232, 184, 74, 0.2), transparent 70%);
+  pointer-events: none;
 }
 
 .landing-cta-band h2 {
@@ -392,27 +392,71 @@
   opacity: 0.7;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero-glow,
+  .landing-hero-bokeh {
+    animation: none;
+  }
+
+  .landing-btn:hover {
+    transform: none;
+  }
+}
+
 @media (max-width: 900px) {
+  .landing-hero {
+    min-height: auto;
+    padding: 5.5rem 1.25rem 3rem;
+  }
+
   .landing-hero-inner,
   .landing-pour {
     grid-template-columns: 1fr;
+    gap: 2rem;
   }
 
-  .landing-hero-visual {
-    order: -1;
+  .landing-hero-frame {
+    max-height: none;
+    aspect-ratio: 4 / 3;
   }
 
-  .landing-bottle-float {
-    right: 0;
-    top: -6%;
-    width: 35%;
+  .landing-usps {
+    padding: 4rem 1.25rem;
   }
 
   .landing-usp-grid {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .landing-pour {
+    padding: 3rem 1.25rem 4rem;
   }
 
   .landing-header {
     padding: 1rem 1.25rem;
+  }
+
+  .landing-cta-band {
+    padding: 4rem 1.25rem 5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-title {
+    font-size: clamp(2.25rem, 8vw, 2.75rem);
+  }
+
+  .landing-hero-cta {
+    flex-direction: column;
+  }
+
+  .landing-hero-cta .landing-btn {
+    width: 100%;
+  }
+
+  .landing-nav .landing-btn-ghost {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.8125rem;
   }
 }
