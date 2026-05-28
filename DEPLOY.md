@@ -112,9 +112,7 @@ Add each of these (use real values):
 |-----|--------|
 | `DATABASE_URL` | Your Neon URL from Part B |
 | `SESSION_SECRET` | Any long random string, e.g. open Terminal and run: `openssl rand -base64 32` |
-| `BOOTSTRAP_ADMIN_EMAIL` | Email you’ll use to sign in, e.g. `you@gmail.com` |
-| `BOOTSTRAP_ADMIN_PASSWORD` | A strong password (8+ characters) |
-| `BOOTSTRAP_TENANT_NAME` | Your bar name, e.g. `My Bar` |
+| `GOOGLE_SHEETS_WEBHOOK_URL` | Your Google Apps Script web app URL (ends with `/exec`) — for signup onboarding rows |
 | `POS_WEBHOOK_SECRET` | Any secret string, e.g. `my-live-webhook-secret-2026` |
 
 Apply to **Production** (and **Deploy previews** if offered).
@@ -127,27 +125,21 @@ Wait 3–5 minutes. When the status is **Published**, click the site URL (e.g. `
 
 ---
 
-## Part D — First login on the live site
+## Part D — First account on the live site
 
-1. Open `https://YOUR-SITE.netlify.app/login`  
-2. Sign in with the **exact** `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` from Part C (no extra spaces).  
-   - Or if you ran seed against Neon: `admin@demo.local` / `changeme123`  
-3. You should land on the admin dashboard.  
-4. Go to **Settings** for your live webhook URL and API key.
+1. Open `https://YOUR-SITE.netlify.app/signup`  
+2. Enter your email, password, and confirm password → **Sign up**  
+3. Complete onboarding: restaurant name, location, how you heard about us → **Continue to dashboard**  
+4. Check your Google Sheet — a new row should appear  
+5. Go to **Settings** for your live webhook URL and API key  
 
-### Check setup before logging in
+**Already have an account?** Use `/login` instead.
 
-Open in your browser (replace with your site URL):
+If you ran seed against Neon: sign in at `/login` with `admin@demo.local` / `changeme123` (skips onboarding).
 
-`https://YOUR-SITE.netlify.app/api/auth/setup-status`
+### Check setup (optional)
 
-You want:
-
-- `userCount`: `0` for first bootstrap  
-- `bootstrapConfigured`: `true`  
-- `canBootstrap`: `true`  
-
-If `bootstrapConfigured` is `false`, Netlify is missing bootstrap env vars or you need to **redeploy**.
+`https://YOUR-SITE.netlify.app/api/auth/setup-status` — shows `userCount` and whether sign up is enabled.
 
 ---
 
@@ -158,42 +150,18 @@ If `bootstrapConfigured` is `false`, Netlify is missing bootstrap env vars or yo
 | Build fails on `prisma db push` | Check `DATABASE_URL` in Netlify env vars; Neon project must be running |
 | Blank page | Open `/login` directly |
 | “Database is not running” on Netlify | Wrong or missing `DATABASE_URL` — must be Neon URL, not localhost |
-| “Invalid email or password” on first login | See **Bootstrap login** below |
-| Login error mentions bootstrap / credentials | Match Netlify `BOOTSTRAP_*` exactly; redeploy after changes |
+| “Email already exists” on sign up | Use **Sign in** or a different email |
+| Onboarding saved but no Google Sheet row | Check `GOOGLE_SHEETS_WEBHOOK_URL` in Netlify and redeploy |
+| Stuck on onboarding after completing it | Sign out and sign in again; clear cookies |
 
-### Bootstrap login (first account on empty database)
+### Google Sheet for signups
 
-Bootstrap only runs when:
+1. Create a sheet with headers: Email, Restaurant name, Location, How did you hear about us, Signed up at  
+2. Deploy a Google Apps Script web app (`doPost`) that appends rows  
+3. Paste the **Web app URL** into Netlify as `GOOGLE_SHEETS_WEBHOOK_URL`  
+4. Redeploy after adding the variable  
 
-1. The `"User"` table is empty on the **same** database as Netlify’s `DATABASE_URL`  
-2. `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` are set in Netlify (Production scope)  
-3. You sign in with that **exact** email and password (8+ characters)  
-4. You **redeployed** after setting variables  
-
-In Neon SQL Editor, confirm the correct database:
-
-```sql
-SELECT COUNT(*) FROM "User";
-```
-
-If count is greater than 0, bootstrap is disabled — use an existing email or run:
-
-```sql
-DELETE FROM "User";
-DELETE FROM "Tenant";
-```
-
-Then log in again with bootstrap credentials.
-
-**Workaround:** seed production from your Mac:
-
-```bash
-cd /Users/Work/restaurant-inventory
-# Put Neon DATABASE_URL in .env, then:
-npm run seed
-```
-
-Sign in with `admin@demo.local` / `changeme123` (unless your `.env` overrides bootstrap email).
+**Local dev:** add the same URL to your `.env` file (never commit it to GitHub).
 
 ---
 

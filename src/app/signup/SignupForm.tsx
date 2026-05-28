@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
-export default function LoginForm() {
+export default function SignupForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/admin";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,40 +16,27 @@ export default function LoginForm() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    if (password !== passwordConfirm) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, passwordConfirm }),
       });
-      const raw = await res.text();
-      let data: {
-        error?: { message?: string; code?: string };
-        ok?: boolean;
-        needsOnboarding?: boolean;
-      } = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        throw new Error(
-          res.ok
-            ? "Invalid server response"
-            : "Server error. Run `npm run db:start` and `npm run db:setup`, then restart `npm run dev`.",
-        );
-      }
+      const data = await res.json();
       if (!res.ok) {
-        throw new Error(
-          data.error?.message ?? data.error?.code ?? "Login failed",
-        );
+        throw new Error(data.error?.message ?? "Sign up failed");
       }
-      if (data.needsOnboarding) {
-        router.replace("/onboarding");
-      } else {
-        router.replace(next.startsWith("/") ? next : "/admin");
-      }
+      router.replace("/onboarding");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
       setLoading(false);
     }
@@ -66,9 +52,9 @@ export default function LoginForm() {
         <span className="text-3xl" role="img" aria-label="bar">
           🍶
         </span>
-        <h1 className="mt-2 text-xl font-semibold">Bar Inventory</h1>
+        <h1 className="mt-2 text-xl font-semibold">Create your account</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Sign in to your venue admin
+          Bar Inventory — manage your venue stock
         </p>
       </div>
 
@@ -98,10 +84,29 @@ export default function LoginForm() {
           <input
             type="password"
             required
-            autoComplete="current-password"
+            autoComplete="new-password"
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className="rounded-lg px-3 py-2 text-sm outline-none"
+            style={{
+              background: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+            Confirm password
+          </span>
+          <input
+            type="password"
+            required
+            autoComplete="new-password"
+            minLength={8}
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
             className="rounded-lg px-3 py-2 text-sm outline-none"
             style={{
               background: "var(--surface-elevated)",
@@ -124,13 +129,13 @@ export default function LoginForm() {
         className="mt-6 w-full rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
         style={{ background: "var(--accent)", color: "#0e0e11" }}
       >
-        {loading ? "Signing in…" : "Sign in"}
+        {loading ? "Creating account…" : "Sign up"}
       </button>
 
       <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-        New here?{" "}
-        <Link href="/signup" style={{ color: "var(--accent)" }}>
-          Create an account
+        Already have an account?{" "}
+        <Link href="/login" style={{ color: "var(--accent)" }}>
+          Sign in
         </Link>
       </p>
     </form>

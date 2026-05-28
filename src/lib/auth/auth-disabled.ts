@@ -23,6 +23,7 @@ export async function getBypassSession(): Promise<SessionPayload | null> {
       email: user.email,
       role: user.role,
       tenantName: user.tenant.name,
+      onboardingComplete: true,
     };
     return cachedBypass;
   }
@@ -45,6 +46,7 @@ export async function getBypassSession(): Promise<SessionPayload | null> {
     email: "bypass@local.dev",
     role: "ADMIN",
     tenantName: tenant.name,
+    onboardingComplete: true,
   };
   return cachedBypass;
 }

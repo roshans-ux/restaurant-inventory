@@ -126,11 +126,10 @@ export default function SettingsPage() {
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Set <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>SESSION_SECRET</code>,{" "}
               <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>DATABASE_URL</code>, and
-              bootstrap credentials in your host&apos;s environment (see{" "}
+              <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>GOOGLE_SHEETS_WEBHOOK_URL</code> in
+              your host&apos;s environment (see{" "}
               <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>.env.example</code>).
-              Each new empty database creates its first venue on first login using{" "}
-              <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>BOOTSTRAP_ADMIN_*</code>{" "}
-              variables.
+              New venues sign up at <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>/signup</code>.
             </p>
           </div>
         </div>

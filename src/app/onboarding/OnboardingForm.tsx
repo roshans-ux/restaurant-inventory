@@ -1,15 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { HEARD_ABOUT_OPTIONS } from "@/lib/onboarding-options";
 
-export default function LoginForm() {
+export default function OnboardingForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/admin";
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [restaurantName, setRestaurantName] = useState("");
+  const [location, setLocation] = useState("");
+  const [heardAboutUs, setHeardAboutUs] = useState<string>(HEARD_ABOUT_OPTIONS[0]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,40 +16,21 @@ export default function LoginForm() {
     e.preventDefault();
     setLoading(true);
     setError("");
+
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ restaurantName, location, heardAboutUs }),
       });
-      const raw = await res.text();
-      let data: {
-        error?: { message?: string; code?: string };
-        ok?: boolean;
-        needsOnboarding?: boolean;
-      } = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        throw new Error(
-          res.ok
-            ? "Invalid server response"
-            : "Server error. Run `npm run db:start` and `npm run db:setup`, then restart `npm run dev`.",
-        );
-      }
+      const data = await res.json();
       if (!res.ok) {
-        throw new Error(
-          data.error?.message ?? data.error?.code ?? "Login failed",
-        );
+        throw new Error(data.error?.message ?? "Could not save details");
       }
-      if (data.needsOnboarding) {
-        router.replace("/onboarding");
-      } else {
-        router.replace(next.startsWith("/") ? next : "/admin");
-      }
+      router.replace("/admin");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Could not save details");
     } finally {
       setLoading(false);
     }
@@ -62,27 +42,23 @@ export default function LoginForm() {
       className="w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
-      <div className="mb-6 text-center">
-        <span className="text-3xl" role="img" aria-label="bar">
-          🍶
-        </span>
-        <h1 className="mt-2 text-xl font-semibold">Bar Inventory</h1>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold">Tell us about your restaurant</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Sign in to your venue admin
+          This helps us set up your venue and improve the product.
         </p>
       </div>
 
       <div className="grid gap-4">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-            Email
+            Restaurant name
           </span>
           <input
-            type="email"
             required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={restaurantName}
+            onChange={(e) => setRestaurantName(e.target.value)}
+            placeholder="e.g. The Copper Fox"
             className="rounded-lg px-3 py-2 text-sm outline-none"
             style={{
               background: "var(--surface-elevated)",
@@ -93,15 +69,13 @@ export default function LoginForm() {
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-            Password
+            Location
           </span>
           <input
-            type="password"
             required
-            autoComplete="current-password"
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="City, state or neighborhood"
             className="rounded-lg px-3 py-2 text-sm outline-none"
             style={{
               background: "var(--surface-elevated)",
@@ -109,6 +83,28 @@ export default function LoginForm() {
               color: "var(--text-primary)",
             }}
           />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+            How did you hear about us?
+          </span>
+          <select
+            required
+            value={heardAboutUs}
+            onChange={(e) => setHeardAboutUs(e.target.value)}
+            className="rounded-lg px-3 py-2 text-sm outline-none"
+            style={{
+              background: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
+          >
+            {HEARD_ABOUT_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 
@@ -124,15 +120,8 @@ export default function LoginForm() {
         className="mt-6 w-full rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
         style={{ background: "var(--accent)", color: "#0e0e11" }}
       >
-        {loading ? "Signing in…" : "Sign in"}
+        {loading ? "Saving…" : "Continue to dashboard"}
       </button>
-
-      <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-        New here?{" "}
-        <Link href="/signup" style={{ color: "var(--accent)" }}>
-          Create an account
-        </Link>
-      </p>
     </form>
   );
 }

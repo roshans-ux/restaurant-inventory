@@ -22,16 +22,21 @@ async function main() {
     create: {
       name: "Demo Venue",
       slug: "demo",
+      location: "Demo City",
+      heardAboutUs: "Other",
+      onboardingCompletedAt: new Date(),
       posWebhookSecret: process.env.POS_WEBHOOK_SECRET ?? "dev-secret",
     },
-    update: {},
+    update: {
+      onboardingCompletedAt: new Date(),
+    },
   });
 
-  const seedEmail = process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@demo.local";
-  const seedPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "changeme123";
+  const seedEmail = (process.env.SEED_ADMIN_EMAIL ?? "admin@demo.local").toLowerCase().trim();
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD ?? "changeme123";
 
   await prisma.user.upsert({
-    where: { tenantId_email: { tenantId: tenant.id, email: seedEmail } },
+    where: { email: seedEmail },
     create: {
       tenantId: tenant.id,
       email: seedEmail,
@@ -43,7 +48,7 @@ async function main() {
   });
 
   console.log(`  Venue: ${tenant.name} (${tenant.slug})`);
-  console.log(`  Admin: ${seedEmail} / (password from BOOTSTRAP_ADMIN_PASSWORD or changeme123)`);
+  console.log(`  Admin: ${seedEmail} / (password from SEED_ADMIN_PASSWORD or changeme123)`);
   console.log(`  Tenant API key: ${tenant.apiKey}`);
 
   for (const spirit of SPIRITS) {

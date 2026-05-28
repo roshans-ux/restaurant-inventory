@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { verifyPassword } from "@/lib/auth/password";
-import { bootstrapFailureMessage, bootstrapTenantIfEmpty } from "@/lib/auth/bootstrap";
+import { buildSessionPayload } from "@/lib/auth/build-session";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
 
 const loginSchema = z.object({
@@ -15,38 +15,22 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = loginSchema.parse(await request.json());
     const email = parsed.email.toLowerCase().trim();
-    const password = parsed.password.trim();
+    const password = parsed.password;
 
-    let user = await prisma.user.findFirst({
+    const user = await prisma.user.findUnique({
       where: { email },
       include: { tenant: true },
     });
 
-    if (!user) {
-      const bootstrap = await bootstrapTenantIfEmpty(email, password);
-      if (!bootstrap.user) {
-        const message = bootstrap.reason
-          ? bootstrapFailureMessage(bootstrap.reason)
-          : "Invalid email or password";
-        return apiError("INVALID_CREDENTIALS", message, 401);
-      }
-      user = bootstrap.user;
-    }
-
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!user || !verifyPassword(password, user.passwordHash)) {
       return apiError("INVALID_CREDENTIALS", "Invalid email or password", 401);
     }
 
-    const token = await createSessionToken({
-      sub: user.id,
-      tenantId: user.tenantId,
-      email: user.email,
-      role: user.role,
-      tenantName: user.tenant.name,
-    });
+    const token = await createSessionToken(buildSessionPayload(user));
 
     const response = NextResponse.json({
       ok: true,
+      needsOnboarding: !user.tenant.onboardingCompletedAt,
       user: {
         email: user.email,
         name: user.name,

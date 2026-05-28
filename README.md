@@ -4,7 +4,7 @@ Multi-tenant alcohol inventory SaaS: POS webhook ingestion, stock movements in m
 
 ## Run Locally
 
-1. Copy `.env.example` to `.env` and set `SESSION_SECRET` (and optional bootstrap credentials).
+1. Copy `.env.example` to `.env` and set `SESSION_SECRET` (and optional `GOOGLE_SHEETS_WEBHOOK_URL` for onboarding).
 
 2. Start a local database (no Docker required):
 
@@ -63,4 +63,4 @@ Sign in at [http://localhost:3000/login](http://localhost:3000/login) with **`ad
 npx prisma generate && npx prisma db push && npm run build
 ```
 
-After deploy, sign in at `/login` with your bootstrap credentials, then copy integration keys from **Settings**.
+After deploy, create an account at `/signup` (or sign in at `/login`), then copy integration keys from **Settings**.

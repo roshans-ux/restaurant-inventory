@@ -14,7 +14,16 @@ export async function GET(request: NextRequest) {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: session.tenantId },
-    select: { id: true, name: true, slug: true, apiKey: true, posWebhookSecret: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      location: true,
+      heardAboutUs: true,
+      onboardingCompletedAt: true,
+      apiKey: true,
+      posWebhookSecret: true,
+    },
   });
 
   if (!tenant) {
@@ -28,5 +37,6 @@ export async function GET(request: NextRequest) {
       role: session.role,
     },
     tenant,
+    needsOnboarding: tenant.onboardingCompletedAt == null,
   });
 }

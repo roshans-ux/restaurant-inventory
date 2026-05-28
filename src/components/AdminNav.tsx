@@ -72,13 +72,11 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
         </span>
         <div className="min-w-0">
           <span className="block text-sm font-semibold tracking-tight truncate" style={{ color: "var(--text-primary)" }}>
+            {venueName ?? "My Restaurant"}
+          </span>
+          <span className="block text-xs truncate" style={{ color: "var(--text-muted)" }}>
             Bar Inventory
           </span>
-          {venueName && (
-            <span className="block text-xs truncate" style={{ color: "var(--text-muted)" }}>
-              {venueName}
-            </span>
-          )}
         </div>
       </div>
 

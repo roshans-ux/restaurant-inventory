@@ -24,7 +24,7 @@ export async function requireApiSession(
     if (bypass) return bypass;
     return apiError(
       "UNAUTHORIZED",
-      "Auth is disabled but the database has no tenant. Run npm run seed or log in once with bootstrap credentials.",
+      "Auth is disabled but the database has no tenant. Run npm run seed or create an account via Sign up.",
       401,
     );
   }
