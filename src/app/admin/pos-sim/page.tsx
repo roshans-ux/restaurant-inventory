@@ -39,7 +39,9 @@ export default function PosSimPage() {
   const [secret, setSecret] = useState("dev-secret");
   const [tenantApiKey, setTenantApiKey] = useState("");
   const [firing, setFiring] = useState(false);
-  const [result, setResult] = useState<{ ok?: boolean; error?: string; idempotent?: boolean } | null>(null);
+  const [result, setResult] = useState<
+    { ok?: boolean; error?: string | { message?: string }; idempotent?: boolean } | null
+  >(null);
   const [lastPayload, setLastPayload] = useState<string>("");
   const [saleHistory, setSaleHistory] = useState<SaleHistoryItem[]>([]);
 
@@ -324,7 +326,7 @@ export default function PosSimPage() {
                 ? result.idempotent
                   ? "⚡ Sale already processed (idempotent)"
                   : `✓ Sale recorded — inventory updated`
-                : `✗ ${result.error}`}
+                : `✗ ${typeof result.error === "string" ? result.error : result.error?.message ?? "Webhook failed"}`}
             </div>
           )}
 
