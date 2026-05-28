@@ -29,6 +29,23 @@ type SaleHistoryItem = {
   }>;
 };
 
+type SaleRejectedLine = {
+  externalLineId: string;
+  posItemId: string;
+  reason: string;
+  productName?: string;
+  requestedQuantity?: number;
+  maxAllowedQuantity?: number;
+  pourMl?: number;
+  availableMl?: number;
+  requiredMl?: number;
+};
+
+type ApiErrorObject = {
+  message?: string;
+  details?: SaleRejectedLine[];
+};
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -40,7 +57,7 @@ export default function PosSimPage() {
   const [tenantApiKey, setTenantApiKey] = useState("");
   const [firing, setFiring] = useState(false);
   const [result, setResult] = useState<
-    { ok?: boolean; error?: string | { message?: string }; idempotent?: boolean } | null
+    { ok?: boolean; error?: string | ApiErrorObject; idempotent?: boolean } | null
   >(null);
   const [lastPayload, setLastPayload] = useState<string>("");
   const [saleHistory, setSaleHistory] = useState<SaleHistoryItem[]>([]);
@@ -172,6 +189,29 @@ export default function PosSimPage() {
 
   const totalMl = lines.reduce((s, l) => s + l.pourMl * l.quantity, 0);
   const formatSaleSize = (ml: number) => (ml === 750 ? "1 bottle" : `${ml}ml`);
+  const formatSaleLabel = (saleId: string) => {
+    if (saleId.startsWith("sim_")) {
+      const suffix = saleId.split("-").at(-1);
+      return suffix ? `Sim Sale ${suffix}` : "Sim Sale";
+    }
+    return `Sale ${saleId.slice(0, 8)}`;
+  };
+  const formatSaleDate = (value: string) =>
+    new Date(value).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  const formatSaleTime = (value: string) =>
+    new Date(value).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  const rejectedLines =
+    result && !result.ok && typeof result.error !== "string" && Array.isArray(result.error?.details)
+      ? result.error.details
+      : [];
 
   return (
     <div className="p-8">
@@ -344,11 +384,43 @@ export default function PosSimPage() {
                 color: result.ok ? "var(--green)" : "var(--red)",
               }}
             >
-              {result.ok
-                ? result.idempotent
-                  ? "⚡ Sale already processed (idempotent)"
-                  : `✓ Sale recorded — inventory updated`
-                : `✗ ${typeof result.error === "string" ? result.error : result.error?.message ?? "Webhook failed"}`}
+              {result.ok ? (
+                result.idempotent ? (
+                  "⚡ Sale already processed (idempotent)"
+                ) : (
+                  "✓ Sale recorded — inventory updated"
+                )
+              ) : (
+                <>
+                  <p>
+                    ✗{" "}
+                    {typeof result.error === "string"
+                      ? result.error
+                      : result.error?.message ?? "Webhook failed"}
+                  </p>
+                  {rejectedLines.length > 0 && (
+                    <ul className="mt-2 grid gap-1 text-xs">
+                      {rejectedLines.map((line) => {
+                        const itemLabel = line.productName ?? line.posItemId;
+                        const saleSize = line.pourMl ? formatSaleSize(line.pourMl) : "sale size";
+                        if (line.reason === "OUT_OF_STOCK_MARGIN_GUARD") {
+                          return (
+                            <li key={line.externalLineId}>
+                              {itemLabel} ({saleSize}): requested {line.requestedQuantity ?? 0}, max allowed{" "}
+                              {line.maxAllowedQuantity ?? 0}
+                            </li>
+                          );
+                        }
+                        return (
+                          <li key={line.externalLineId}>
+                            {itemLabel}: {line.reason}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -378,6 +450,11 @@ export default function PosSimPage() {
               <h3 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
                 Recent Sales
               </h3>
+              <div className="mb-2 grid grid-cols-[1.4fr_1fr_0.7fr] gap-3 px-3 text-[11px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                <span>Sale</span>
+                <span>Date</span>
+                <span className="text-right">Time</span>
+              </div>
               <div className="grid gap-2">
                 {saleHistory.map((item) => (
                   <div
@@ -388,12 +465,15 @@ export default function PosSimPage() {
                       border: "1px solid var(--border-subtle)",
                     }}
                   >
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="grid grid-cols-[1.4fr_1fr_0.7fr] items-center gap-3">
                       <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
-                        {item.saleId}
+                        {formatSaleLabel(item.saleId)}
                       </span>
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {new Date(item.soldAt).toLocaleString()}
+                        {formatSaleDate(item.soldAt)}
+                      </span>
+                      <span className="text-right text-xs" style={{ color: "var(--text-muted)" }}>
+                        {formatSaleTime(item.soldAt)}
                       </span>
                     </div>
                     <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>

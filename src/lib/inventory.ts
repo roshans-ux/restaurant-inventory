@@ -137,5 +137,6 @@ export function isWithinReplayWindow(soldAtIso: string): boolean {
 }
 
 export function stockGuardReserveMl(bottleSizeMl: number): number {
-  return Math.round(bottleSizeMl * SALE_GUARD_MARGIN_PERCENT);
+  const percentReserve = Math.round(bottleSizeMl * SALE_GUARD_MARGIN_PERCENT);
+  return Math.min(STANDARD_POUR_ML, Math.max(0, percentReserve));
 }

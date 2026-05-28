@@ -123,6 +123,10 @@ export async function POST(request: NextRequest) {
         externalLineId: string;
         posItemId: string;
         reason: string;
+        productName?: string;
+        requestedQuantity?: number;
+        maxAllowedQuantity?: number;
+        pourMl?: number;
         availableMl?: number;
         requiredMl?: number;
       }> = [];
@@ -158,10 +162,15 @@ export async function POST(request: NextRequest) {
         const availableForSaleMl = Math.max(0, currentMl - reserveMl);
 
         if (decrementMl > availableForSaleMl) {
+          const maxAllowedQuantity = Math.max(0, Math.floor(availableForSaleMl / pourMl));
           rejectedLines.push({
             externalLineId: line.external_line_id,
             posItemId: line.pos_item_id,
             reason: "OUT_OF_STOCK_MARGIN_GUARD",
+            productName: mapping.product.name,
+            requestedQuantity: line.quantity,
+            maxAllowedQuantity,
+            pourMl,
             availableMl: availableForSaleMl,
             requiredMl: decrementMl,
           });
