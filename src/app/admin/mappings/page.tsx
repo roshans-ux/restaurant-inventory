@@ -8,7 +8,7 @@ type Mapping = {
   id: string;
   posItemId: string;
   pourMl: string;
-  product: { name: string };
+  product: { id: string; name: string };
 };
 
 const POUR_OPTIONS = [30, 60];
@@ -19,7 +19,9 @@ export default function MappingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [posItemId, setPosItemId] = useState("");
   const [pourMl, setPourMl] = useState(30);
 
   const load = useCallback(async () => {
@@ -42,29 +44,44 @@ export default function MappingsPage() {
     if (p) setPourMl(Number(p.defaultPourMl));
   }
 
+  function resetForm() {
+    setEditingId(null);
+    setSelectedProductId("");
+    setPosItemId("");
+    setPourMl(30);
+  }
+
+  function onEdit(mapping: Mapping) {
+    setEditingId(mapping.id);
+    setSelectedProductId(mapping.product.id);
+    setPosItemId(mapping.posItemId);
+    setPourMl(Number(mapping.pourMl));
+    setError("");
+    setOk("");
+  }
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
     setError("");
     setOk("");
-    const f = new FormData(e.currentTarget);
     const res = await fetch("/api/pos-mappings", {
-      method: "POST",
+      method: editingId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        ...(editingId ? { id: editingId } : {}),
         productId: selectedProductId,
-        posItemId: f.get("posItemId"),
+        posItemId: posItemId.trim(),
         pourMl,
       }),
     });
     const data = await res.json();
-    if (data.error) {
-      setError(data.error);
+    if (!res.ok || data.ok === false || data.error) {
+      setError(data.error?.message ?? "Failed to save mapping");
     } else {
-      setOk(`Mapped: ${data.mapping.posItemId}`);
+      setOk(`${editingId ? "Updated" : "Mapped"}: ${data.mapping.posItemId}`);
       await load();
-      (e.target as HTMLFormElement).reset();
-      setSelectedProductId("");
+      resetForm();
     }
     setSaving(false);
   }
@@ -86,7 +103,7 @@ export default function MappingsPage() {
         >
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-secondary)" }}>
             <Plus size={13} />
-            Add / Update Mapping
+            {editingId ? "Edit Mapping" : "Add Mapping"}
           </h2>
 
           <div className="grid gap-4">
@@ -131,6 +148,8 @@ export default function MappingsPage() {
                 name="posItemId"
                 required
                 placeholder="e.g. menu_vodka_martini"
+                value={posItemId}
+                onChange={(e) => setPosItemId(e.target.value)}
                 className="rounded-lg px-3 py-2 text-sm font-mono outline-none"
                 style={{
                   background: "var(--surface-elevated)",
@@ -184,12 +203,22 @@ export default function MappingsPage() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !selectedProductId || !posItemId.trim()}
             className="mt-4 w-full rounded-lg py-2 text-sm font-medium transition-opacity disabled:opacity-50"
             style={{ background: "var(--accent)", color: "#0e0e11" }}
           >
-            {saving ? "Saving…" : "Save Mapping"}
+            {saving ? "Saving…" : editingId ? "Update Mapping" : "Save Mapping"}
           </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="mt-2 w-full rounded-lg py-2 text-sm font-medium"
+              style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            >
+              Cancel Edit
+            </button>
+          )}
         </form>
 
         <div>
@@ -209,6 +238,7 @@ export default function MappingsPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>POS Item ID</th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Bottle</th>
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Pour</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -226,6 +256,19 @@ export default function MappingsPage() {
                       <td className="px-4 py-3 font-medium">{m.product.name}</td>
                       <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--accent)" }}>
                         {Number(m.pourMl)}ml
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => onEdit(m)}
+                          className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                          style={{
+                            border: "1px solid var(--border)",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          Edit
+                        </button>
                       </td>
                     </tr>
                   ))}
