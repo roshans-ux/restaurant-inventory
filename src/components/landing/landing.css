@@ -5,8 +5,8 @@
   --landing-gold-dim: rgba(232, 184, 74, 0.14);
   --landing-cream: #f4efe6;
   --landing-muted: #9a96a8;
-  --landing-font-display: var(--font-landing-display), "Cormorant Garamond", Georgia, serif;
-  --landing-font-body: var(--font-landing-body), "DM Sans", system-ui, sans-serif;
+  --landing-font-display: var(--font-family-display), "EB Garamond", Georgia, serif;
+  --landing-font-body: var(--font-family-body), "Alegreya Sans", system-ui, sans-serif;
 
   position: relative;
   min-height: 100vh;
