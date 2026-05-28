@@ -9,6 +9,7 @@ export function buildSessionPayload(user: User & { tenant: Tenant }): SessionPay
     role: user.role,
     tenantName: user.tenant.name,
     onboardingComplete: user.tenant.onboardingCompletedAt != null,
+    emailVerified: user.emailVerifiedAt != null,
   };
 }
 

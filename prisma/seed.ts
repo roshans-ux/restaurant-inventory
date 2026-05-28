@@ -43,8 +43,9 @@ async function main() {
       passwordHash: hashPassword(seedPassword),
       name: "Demo Admin",
       role: UserRole.OWNER,
+      emailVerifiedAt: new Date(),
     },
-    update: {},
+    update: { emailVerifiedAt: new Date() },
   });
 
   console.log(`  Venue: ${tenant.name} (${tenant.slug})`);

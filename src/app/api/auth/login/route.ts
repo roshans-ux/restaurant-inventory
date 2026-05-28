@@ -26,6 +26,15 @@ export async function POST(request: NextRequest) {
       return apiError("INVALID_CREDENTIALS", "Invalid email or password", 401);
     }
 
+    if (!user.emailVerifiedAt) {
+      return apiError(
+        "EMAIL_NOT_VERIFIED",
+        "Verify your email before signing in. Check your inbox or resend the link.",
+        403,
+        { email: user.email },
+      );
+    }
+
     const token = await createSessionToken(buildSessionPayload(user));
 
     const response = NextResponse.json({

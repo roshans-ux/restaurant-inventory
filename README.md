@@ -4,7 +4,7 @@ Multi-tenant alcohol inventory SaaS: POS webhook ingestion, stock movements in m
 
 ## Run Locally
 
-1. Copy `.env.example` to `.env` and set `SESSION_SECRET` (and optional `GOOGLE_SHEETS_WEBHOOK_URL` for onboarding).
+1. Copy `.env.example` to `.env` and set `SESSION_SECRET`. For signup verification and password reset emails, set `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_URL` (optional `GOOGLE_SHEETS_WEBHOOK_URL` for onboarding).
 
 2. Start a local database (no Docker required):
 
@@ -38,6 +38,8 @@ Sign in at [http://localhost:3000/login](http://localhost:3000/login) with **`ad
 
 ## Authentication & Tenancy
 
+- Signup sends a **verification email**; users must verify before onboarding/admin access.
+- **Forgot password** at `/forgot-password` sends a reset link (verified accounts only; unverified accounts get another verification email).
 - All `/admin` pages and `/api/*` routes (except auth, health, and POS webhooks) require a signed session cookie.
 - Each **tenant** is one venue (customer). Users belong to exactly one tenant.
 - On first login to an empty database, the app creates a tenant and owner account using `BOOTSTRAP_ADMIN_*` env vars.

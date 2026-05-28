@@ -14,6 +14,7 @@ function getSecret() {
 type SessionClaims = {
   valid: boolean;
   onboardingComplete: boolean;
+  emailVerified: boolean;
 };
 
 async function getSessionClaims(request: NextRequest): Promise<SessionClaims | null> {
@@ -24,20 +25,48 @@ async function getSessionClaims(request: NextRequest): Promise<SessionClaims | n
     return {
       valid: true,
       onboardingComplete: payload.onboardingComplete === true,
+      emailVerified: payload.emailVerified === true,
     };
   } catch {
-    return { valid: false, onboardingComplete: false };
+    return { valid: false, onboardingComplete: false, emailVerified: false };
   }
 }
 
 function isPublicPath(pathname: string): boolean {
-  if (pathname === "/login" || pathname === "/signup") return true;
-  if (pathname === "/onboarding") return true;
-  if (pathname === "/api/auth/login" || pathname === "/api/auth/signup") return true;
-  if (pathname === "/api/auth/setup-status") return true;
+  if (
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/onboarding" ||
+    pathname === "/verify-email" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password"
+  ) {
+    return true;
+  }
+  if (
+    pathname === "/api/auth/login" ||
+    pathname === "/api/auth/signup" ||
+    pathname === "/api/auth/setup-status" ||
+    pathname === "/api/auth/verify-email" ||
+    pathname === "/api/auth/resend-verification" ||
+    pathname === "/api/auth/forgot-password" ||
+    pathname === "/api/auth/reset-password"
+  ) {
+    return true;
+  }
   if (pathname === "/api/health") return true;
   if (pathname.startsWith("/api/webhooks/")) return true;
   return false;
+}
+
+function isEmailVerificationExempt(pathname: string): boolean {
+  return (
+    pathname === "/verify-email" ||
+    pathname === "/api/auth/verify-email" ||
+    pathname === "/api/auth/resend-verification" ||
+    pathname === "/api/auth/logout" ||
+    pathname === "/api/auth/me"
+  );
 }
 
 function isOnboardingExemptApi(pathname: string): boolean {
@@ -56,7 +85,14 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isAuthDisabled()) {
-    if (pathname === "/login" || pathname === "/signup" || pathname === "/onboarding") {
+    if (
+      pathname === "/login" ||
+      pathname === "/signup" ||
+      pathname === "/onboarding" ||
+      pathname === "/verify-email" ||
+      pathname === "/forgot-password" ||
+      pathname === "/reset-password"
+    ) {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
     return NextResponse.next();
@@ -64,8 +100,21 @@ export async function middleware(request: NextRequest) {
 
   const claims = await getSessionClaims(request);
 
-  if (pathname === "/login" || pathname === "/signup") {
-    if (claims?.valid) {
+  if (
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password"
+  ) {
+    if (claims?.valid && claims.emailVerified) {
+      const dest = claims.onboardingComplete ? "/admin" : "/onboarding";
+      return NextResponse.redirect(new URL(dest, request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (pathname === "/verify-email") {
+    if (claims?.valid && claims.emailVerified) {
       const dest = claims.onboardingComplete ? "/admin" : "/onboarding";
       return NextResponse.redirect(new URL(dest, request.url));
     }
@@ -75,6 +124,9 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/onboarding") {
     if (!claims?.valid) {
       return NextResponse.redirect(new URL("/login", request.url));
+    }
+    if (!claims.emailVerified) {
+      return NextResponse.redirect(new URL("/verify-email", request.url));
     }
     if (claims.onboardingComplete) {
       return NextResponse.redirect(new URL("/admin", request.url));
@@ -98,6 +150,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (!claims.emailVerified) {
+    if (isEmailVerificationExempt(pathname)) {
+      return NextResponse.next();
+    }
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "EMAIL_NOT_VERIFIED",
+            message: "Verify your email to continue",
+          },
+        },
+        { status: 403 },
+      );
+    }
+    return NextResponse.redirect(new URL("/verify-email", request.url));
+  }
+
   if (!claims.onboardingComplete) {
     if (pathname.startsWith("/api/")) {
       if (isOnboardingExemptApi(pathname)) {
@@ -118,5 +189,14 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/:path*", "/login", "/signup", "/onboarding"],
+  matcher: [
+    "/admin/:path*",
+    "/api/:path*",
+    "/login",
+    "/signup",
+    "/onboarding",
+    "/verify-email",
+    "/forgot-password",
+    "/reset-password",
+  ],
 };

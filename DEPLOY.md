@@ -114,6 +114,9 @@ Add each of these (use real values):
 | `SESSION_SECRET` | Any long random string, e.g. open Terminal and run: `openssl rand -base64 32` |
 | `GOOGLE_SHEETS_WEBHOOK_URL` | Your Google Apps Script web app URL (ends with `/exec`) — for signup onboarding rows |
 | `POS_WEBHOOK_SECRET` | Any secret string, e.g. `my-live-webhook-secret-2026` |
+| `RESEND_API_KEY` | API key from [resend.com](https://resend.com) — signup verification + password reset emails |
+| `EMAIL_FROM` | Verified sender, e.g. `Bar Inventory <noreply@yourdomain.com>` |
+| `APP_URL` | Your live site URL, e.g. `https://restaurant-inventory-mgmt.netlify.app` (no trailing slash) |
 
 Apply to **Production** (and **Deploy previews** if offered).
 
@@ -136,6 +139,14 @@ Wait 3–5 minutes. When the status is **Published**, click the site URL (e.g. `
 **Already have an account?** Use `/login` instead.
 
 If you ran seed against Neon: sign in at `/login` with `admin@demo.local` / `changeme123` (skips onboarding).
+
+**Existing accounts before email verification:** After the first deploy with this feature, run once in Neon SQL:
+
+```sql
+UPDATE "User" SET "emailVerifiedAt" = NOW() WHERE "emailVerifiedAt" IS NULL;
+```
+
+That keeps current restaurants able to log in without re-verifying.
 
 ### Check setup (optional)
 

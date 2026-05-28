@@ -11,6 +11,7 @@ export type SessionPayload = {
   role: string;
   tenantName: string;
   onboardingComplete: boolean;
+  emailVerified: boolean;
 };
 
 function getSecret() {
@@ -42,6 +43,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       role: String(payload.role ?? "ADMIN"),
       tenantName: String(payload.tenantName ?? "Venue"),
       onboardingComplete: payload.onboardingComplete === true,
+      emailVerified: payload.emailVerified === true,
     };
   } catch {
     return null;

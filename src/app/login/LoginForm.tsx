@@ -8,9 +8,11 @@ export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/admin";
+  const resetSuccess = searchParams.get("reset") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState(resetSuccess ? "Password updated. Sign in with your new password." : "");
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: FormEvent) {
@@ -39,6 +41,12 @@ export default function LoginForm() {
         );
       }
       if (!res.ok) {
+        if (data.error?.code === "EMAIL_NOT_VERIFIED") {
+          const addr = encodeURIComponent(email.toLowerCase().trim());
+          router.replace(`/verify-email?email=${addr}`);
+          router.refresh();
+          return;
+        }
         throw new Error(
           data.error?.message ?? data.error?.code ?? "Login failed",
         );
@@ -111,6 +119,18 @@ export default function LoginForm() {
           />
         </label>
       </div>
+
+      <p className="mt-1 text-right text-xs">
+        <Link href="/forgot-password" style={{ color: "var(--accent)" }}>
+          Forgot password?
+        </Link>
+      </p>
+
+      {info && (
+        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {info}
+        </p>
+      )}
 
       {error && (
         <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>

@@ -72,7 +72,8 @@ export default function SignupForm() {
         }
         return;
       }
-      router.replace("/onboarding");
+      const verifiedEmail = encodeURIComponent(email.toLowerCase().trim());
+      router.replace(`/verify-email?email=${verifiedEmail}`);
       router.refresh();
     } catch {
       setFormError("Sign up failed");
