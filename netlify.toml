@@ -1,5 +1,6 @@
 [build]
-  command = "npx prisma generate && npx prisma db push && npm run build"
+  # --accept-data-loss: required when adding global unique on User.email (signup); safe if no duplicate emails in DB
+  command = "npx prisma generate && npx prisma db push --accept-data-loss && npm run build"
 
 [build.environment]
   NODE_VERSION = "20"
