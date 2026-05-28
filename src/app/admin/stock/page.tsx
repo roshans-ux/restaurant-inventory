@@ -35,6 +35,12 @@ type StockActivity = {
   product: { name: string };
 };
 
+type ActivityResponse = {
+  data?: {
+    activity?: StockActivity[];
+  };
+};
+
 function Stepper({
   value,
   onChange,
@@ -101,11 +107,11 @@ export default function StockPage() {
     const [pr, lv, ac] = await Promise.all([
       fetch("/api/products").then((r) => r.json()),
       fetch("/api/inventory/levels").then((r) => r.json()),
-      fetch("/api/inventory/activity").then((r) => r.json()),
+      fetch("/api/inventory/activity").then((r) => r.json() as Promise<ActivityResponse>),
     ]);
     setProducts(pr.products ?? []);
     setLevels(lv.levels ?? []);
-    setActivity(ac.activity ?? []);
+    setActivity(ac.data?.activity ?? []);
   }, []);
 
   useEffect(() => {
@@ -343,12 +349,12 @@ export default function StockPage() {
                           {t.label}
                         </option>
                       ))}
-                      {ENABLE_POUR_VARIANCE_ADJUSTMENTS && (
-                        <>
-                          <option value="UNDERPOUR">Underpour</option>
-                          <option value="OVERPOUR">Overpour</option>
-                        </>
-                      )}
+                      <option value="UNDERPOUR" disabled={!ENABLE_POUR_VARIANCE_ADJUSTMENTS}>
+                        Underpour {!ENABLE_POUR_VARIANCE_ADJUSTMENTS ? "(disabled for now)" : ""}
+                      </option>
+                      <option value="OVERPOUR" disabled={!ENABLE_POUR_VARIANCE_ADJUSTMENTS}>
+                        Overpour {!ENABLE_POUR_VARIANCE_ADJUSTMENTS ? "(disabled for now)" : ""}
+                      </option>
                     </select>
                     <ChevronDown
                       size={13}
