@@ -47,7 +47,10 @@ Sign in at [http://localhost:3000/login](http://localhost:3000/login) with **`ad
   - `x-tenant-api-key` — tenant API key (shown in **Settings**)
   - `x-pos-signature` — HMAC-SHA256 hex of the raw JSON body using the tenant webhook secret
 
-## Deploy to Netlify
+## Deploy
+
+- **Vercel:** [DEPLOY-VERCEL.md](./DEPLOY-VERCEL.md) (recommended if Netlify is paused)
+- **Netlify:** [DEPLOY.md](./DEPLOY.md)
 
 1. Create a hosted Postgres database (Neon/Supabase recommended).
 2. Push this repository to GitHub.

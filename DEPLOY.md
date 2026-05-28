@@ -1,5 +1,7 @@
 # Deploy to Netlify (step-by-step, no jargon)
 
+> **Vercel instead?** See [DEPLOY-VERCEL.md](./DEPLOY-VERCEL.md) — repo includes `vercel.json`; you only connect GitHub and paste env vars in the Vercel UI.
+
 You need **3 free accounts** (about 20 minutes total):
 
 1. **GitHub** — stores your code  
