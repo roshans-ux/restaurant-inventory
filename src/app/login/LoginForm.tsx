@@ -23,7 +23,7 @@ export default function LoginForm() {
         body: JSON.stringify({ email, password }),
       });
       const raw = await res.text();
-      let data: { error?: { message?: string }; ok?: boolean } = {};
+      let data: { error?: { message?: string; code?: string }; ok?: boolean } = {};
       try {
         data = raw ? JSON.parse(raw) : {};
       } catch {
@@ -34,7 +34,9 @@ export default function LoginForm() {
         );
       }
       if (!res.ok) {
-        throw new Error(data.error?.message ?? "Login failed");
+        throw new Error(
+          data.error?.message ?? data.error?.code ?? "Login failed",
+        );
       }
       router.replace(next.startsWith("/") ? next : "/admin");
       router.refresh();

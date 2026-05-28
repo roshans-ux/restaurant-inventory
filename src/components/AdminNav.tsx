@@ -32,7 +32,7 @@ type MeResponse = {
   };
 };
 
-export default function AdminNav() {
+export default function AdminNav({ authPaused = false }: { authPaused?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [venueName, setVenueName] = useState<string | null>(null);
@@ -109,16 +109,18 @@ export default function AdminNav() {
             {email}
           </p>
         )}
-        <button
-          type="button"
-          onClick={logout}
-          disabled={loggingOut}
-          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          <LogOut size={15} strokeWidth={1.5} />
-          {loggingOut ? "Signing out…" : "Sign out"}
-        </button>
+        {!authPaused && (
+          <button
+            type="button"
+            onClick={logout}
+            disabled={loggingOut}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <LogOut size={15} strokeWidth={1.5} />
+            {loggingOut ? "Signing out…" : "Sign out"}
+          </button>
+        )}
       </div>
     </nav>
   );

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
-import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { verifyPassword } from "@/lib/auth/password";
+import { bootstrapFailureMessage, bootstrapTenantIfEmpty } from "@/lib/auth/bootstrap";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
 
 const loginSchema = z.object({
@@ -11,53 +11,11 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
-async function bootstrapTenantIfEmpty(email: string, password: string) {
-  const count = await prisma.user.count();
-  if (count > 0) return null;
-
-  const bootstrapEmail = (
-    process.env.BOOTSTRAP_ADMIN_EMAIL ??
-    (process.env.NODE_ENV !== "production" ? "admin@demo.local" : undefined)
-  )?.toLowerCase();
-  const bootstrapPassword =
-    process.env.BOOTSTRAP_ADMIN_PASSWORD ??
-    (process.env.NODE_ENV !== "production" ? "changeme123" : undefined);
-  if (!bootstrapEmail || !bootstrapPassword) return null;
-  if (email !== bootstrapEmail || password !== bootstrapPassword) return null;
-
-  const tenantName = process.env.BOOTSTRAP_TENANT_NAME ?? "My Venue";
-  const slug = tenantName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "venue";
-
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: tenantName,
-      slug: `${slug}-${randomUUID().slice(0, 6)}`,
-      posWebhookSecret: process.env.POS_WEBHOOK_SECRET ?? "dev-secret",
-    },
-  });
-
-  const user = await prisma.user.create({
-    data: {
-      tenantId: tenant.id,
-      email: bootstrapEmail,
-      passwordHash: hashPassword(bootstrapPassword),
-      name: "Owner",
-      role: "OWNER",
-    },
-    include: { tenant: true },
-  });
-
-  return user;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const parsed = loginSchema.parse(await request.json());
     const email = parsed.email.toLowerCase().trim();
+    const password = parsed.password.trim();
 
     let user = await prisma.user.findFirst({
       where: { email },
@@ -65,14 +23,17 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      const bootstrapped = await bootstrapTenantIfEmpty(email, parsed.password);
-      if (!bootstrapped) {
-        return apiError("INVALID_CREDENTIALS", "Invalid email or password", 401);
+      const bootstrap = await bootstrapTenantIfEmpty(email, password);
+      if (!bootstrap.user) {
+        const message = bootstrap.reason
+          ? bootstrapFailureMessage(bootstrap.reason)
+          : "Invalid email or password";
+        return apiError("INVALID_CREDENTIALS", message, 401);
       }
-      user = bootstrapped;
+      user = bootstrap.user;
     }
 
-    if (!verifyPassword(parsed.password, user.passwordHash)) {
+    if (!verifyPassword(password, user.passwordHash)) {
       return apiError("INVALID_CREDENTIALS", "Invalid email or password", 401);
     }
 
@@ -113,10 +74,9 @@ export async function POST(request: NextRequest) {
       raw.includes("ECONNREFUSED")
     ) {
       message =
-        "Database is not running. Run `npm run db:start`, then `npm run db:setup`, and restart `npm run dev`.";
+        "Database is not reachable. Check DATABASE_URL on your host (e.g. Neon) and redeploy.";
     } else if (raw.includes("not compatible with the provider")) {
-      message =
-        "Prisma client is out of date. Stop the dev server, run `npx prisma generate`, then start again with `npm run dev`.";
+      message = "Prisma client is out of date. Run `npx prisma generate` and redeploy.";
     }
     return apiError("LOGIN_FAILED", message, 500);
   }

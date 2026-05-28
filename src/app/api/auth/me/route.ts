@@ -1,10 +1,13 @@
 import { NextRequest } from "next/server";
 import { apiError, apiOk } from "@/lib/http";
+import { getBypassSession, isAuthDisabled } from "@/lib/auth/auth-disabled";
 import { getSessionFromRequest } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
-  const session = await getSessionFromRequest(request);
+  const session =
+    (isAuthDisabled() ? await getBypassSession() : null) ??
+    (await getSessionFromRequest(request));
   if (!session) {
     return apiError("UNAUTHORIZED", "Sign in required", 401);
   }

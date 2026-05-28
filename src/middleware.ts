@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { isAuthDisabled } from "@/lib/auth/auth-disabled";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 
 function getSecret() {
@@ -24,6 +25,13 @@ function needsAuth(pathname: string): boolean {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (isAuthDisabled()) {
+    if (pathname === "/login") {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+    return NextResponse.next();
+  }
 
   if (!needsAuth(pathname) || isPublicPath(pathname)) {
     if (pathname === "/login") {
