@@ -450,10 +450,9 @@ export default function PosSimPage() {
               <h3 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
                 Recent Sales
               </h3>
-              <div className="mb-2 grid grid-cols-[1.4fr_1fr_0.7fr] gap-3 px-3 text-[11px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+              <div className="mb-2 grid grid-cols-[1.4fr_1fr] gap-3 px-3 text-[11px] uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                 <span>Sale</span>
-                <span>Date</span>
-                <span className="text-right">Time</span>
+                <span className="text-right">Date/Time</span>
               </div>
               <div className="grid gap-2">
                 {saleHistory.map((item) => (
@@ -465,15 +464,12 @@ export default function PosSimPage() {
                       border: "1px solid var(--border-subtle)",
                     }}
                   >
-                    <div className="grid grid-cols-[1.4fr_1fr_0.7fr] items-center gap-3">
+                    <div className="grid grid-cols-[1.4fr_1fr] items-center gap-3">
                       <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
                         {formatSaleLabel(item.saleId)}
                       </span>
-                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formatSaleDate(item.soldAt)}
-                      </span>
                       <span className="text-right text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formatSaleTime(item.soldAt)}
+                        {formatSaleDate(item.soldAt)} {formatSaleTime(item.soldAt)}
                       </span>
                     </div>
                     <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>

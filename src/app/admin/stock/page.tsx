@@ -42,13 +42,29 @@ type ActivityResponse = {
 };
 
 type ActivityFilter = "all" | "receive" | "adjust";
-type ActivitySortField = "name" | "type" | "qty";
+type ActivitySortField = "name" | "type" | "qty" | "dateTime";
 type ActivitySortDirection = "asc" | "desc";
 
 function activityTypeLabel(type: string) {
   if (type === "RECEIVE") return "Receive stock";
   if (type === "ADJUSTMENT") return "Adjustment";
   return type.replaceAll("_", " ");
+}
+
+function formatActivityDate(value: string) {
+  return new Date(value).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatActivityTime(value: string) {
+  return new Date(value).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 function Stepper({
@@ -155,6 +171,8 @@ export default function StockPage() {
         compare = activityTypeLabel(a.type).localeCompare(activityTypeLabel(b.type), undefined, {
           sensitivity: "base",
         });
+      } else if (sortField === "dateTime") {
+        compare = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       } else {
         compare = a.quantityDeltaMl - b.quantityDeltaMl;
       }
@@ -656,6 +674,11 @@ export default function StockPage() {
                       Type{sortIndicator("type")}
                     </button>
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
+                    <button type="button" onClick={() => onSort("dateTime")} style={{ color: "var(--text-muted)" }}>
+                      Date/Time{sortIndicator("dateTime")}
+                    </button>
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
                     <button type="button" onClick={() => onSort("qty")} style={{ color: "var(--text-muted)" }}>
                       Qty Movement{sortIndicator("qty")}
@@ -680,6 +703,9 @@ export default function StockPage() {
                         {entry.reason ?? "—"}
                       </p>
                     </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                      {formatActivityDate(entry.createdAt)} {formatActivityTime(entry.createdAt)}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <p
                         className="font-medium tabular-nums"
@@ -687,9 +713,6 @@ export default function StockPage() {
                       >
                         {entry.quantityDeltaMl >= 0 ? "+" : ""}
                         {entry.quantityDeltaMl}ml
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {new Date(entry.createdAt).toLocaleString()}
                       </p>
                     </td>
                   </tr>
