@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Zap, Plus, Trash2, Send } from "lucide-react";
 
 type Mapping = {
@@ -20,7 +20,7 @@ type SaleLine = {
 type SaleHistoryItem = {
   id: string;
   saleId: string;
-  recordedAt: string;
+  soldAt: string;
   totalMl: number;
   lines: Array<{
     productName: string;
@@ -44,6 +44,7 @@ export default function PosSimPage() {
   >(null);
   const [lastPayload, setLastPayload] = useState<string>("");
   const [saleHistory, setSaleHistory] = useState<SaleHistoryItem[]>([]);
+  const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/pos-mappings");
@@ -51,9 +52,14 @@ export default function PosSimPage() {
     setMappings(data.mappings ?? []);
   }, []);
 
-   
+  const loadRecentSales = useCallback(async () => {
+    const res = await fetch("/api/pos-sim/sales");
+    const data = await res.json();
+    setSaleHistory(data.data?.sales ?? []);
+  }, []);
+
   useEffect(() => {
-    load();
+    Promise.all([load(), loadRecentSales()]);
     fetch("/api/auth/me")
       .then((res) => res.json())
       .then((data) => {
@@ -65,7 +71,17 @@ export default function PosSimPage() {
         }
       })
       .catch(() => {});
-  }, [load]);
+  }, [load, loadRecentSales]);
+
+  const filteredMappings = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return mappings;
+    return mappings.filter(
+      (m) =>
+        m.product.name.toLowerCase().includes(query) ||
+        m.posItemId.toLowerCase().includes(query),
+    );
+  }, [mappings, search]);
 
   function addLine(posItemId: string) {
     const m = mappings.find((x) => x.posItemId === posItemId);
@@ -149,23 +165,13 @@ export default function PosSimPage() {
     setFiring(false);
 
     if (data.ok) {
-      const historyItem: SaleHistoryItem = {
-        id: uid(),
-        saleId: payload.external_sale_id,
-        recordedAt: new Date().toISOString(),
-        totalMl,
-        lines: lines.map((l) => ({
-          productName: l.productName,
-          quantity: l.quantity,
-          pourMl: l.pourMl,
-        })),
-      };
-      setSaleHistory((prev) => [historyItem, ...prev].slice(0, 20));
+      await loadRecentSales();
       setLines([]);
     }
   }
 
   const totalMl = lines.reduce((s, l) => s + l.pourMl * l.quantity, 0);
+  const formatSaleSize = (ml: number) => (ml === 750 ? "1 bottle" : `${ml}ml`);
 
   return (
     <div className="p-8">
@@ -189,13 +195,29 @@ export default function PosSimPage() {
               Add Items to Sale
             </h2>
 
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by bottle or POS item ID"
+              className="mb-3 w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={{
+                background: "var(--surface-elevated)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            />
+
             {mappings.length === 0 ? (
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 No POS mappings yet — add some on the Mappings page first
               </p>
+            ) : filteredMappings.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                No mapped items match your search
+              </p>
             ) : (
               <div className="grid gap-2">
-                {mappings.map((m) => (
+                {filteredMappings.map((m) => (
                   <button
                     key={m.id}
                     type="button"
@@ -213,7 +235,7 @@ export default function PosSimPage() {
                         className="rounded-full px-2 py-0.5 text-xs"
                         style={{ background: "var(--accent-dim)", color: "var(--accent)" }}
                       >
-                        {Number(m.pourMl)}ml
+                        {formatSaleSize(Number(m.pourMl))}
                       </span>
                       <Plus size={14} style={{ color: "var(--accent)" }} />
                     </span>
@@ -277,7 +299,7 @@ export default function PosSimPage() {
                     <div>
                       <span className="text-sm font-medium">{l.productName}</span>
                       <span className="ml-2 text-xs" style={{ color: "var(--accent)" }}>
-                        {l.pourMl}ml × {l.quantity} = {l.pourMl * l.quantity}ml
+                        {formatSaleSize(l.pourMl)} × {l.quantity} = {l.pourMl * l.quantity}ml
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -371,12 +393,12 @@ export default function PosSimPage() {
                         {item.saleId}
                       </span>
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {new Date(item.recordedAt).toLocaleString()}
+                        {new Date(item.soldAt).toLocaleString()}
                       </span>
                     </div>
                     <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                       {item.lines
-                        .map((l) => `${l.productName} (${l.quantity} × ${l.pourMl}ml)`)
+                        .map((l) => `${l.productName} (${l.quantity} × ${formatSaleSize(l.pourMl)})`)
                         .join(" · ")}
                     </p>
                     <p className="mt-1 text-xs font-medium" style={{ color: "var(--accent)" }}>

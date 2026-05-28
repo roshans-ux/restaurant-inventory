@@ -41,6 +41,16 @@ type ActivityResponse = {
   };
 };
 
+type ActivityFilter = "all" | "receive" | "adjust";
+type ActivitySortField = "name" | "type" | "qty";
+type ActivitySortDirection = "asc" | "desc";
+
+function activityTypeLabel(type: string) {
+  if (type === "RECEIVE") return "Receive stock";
+  if (type === "ADJUSTMENT") return "Adjustment";
+  return type.replaceAll("_", " ");
+}
+
 function Stepper({
   value,
   onChange,
@@ -102,6 +112,9 @@ export default function StockPage() {
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [activity, setActivity] = useState<StockActivity[]>([]);
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [sortField, setSortField] = useState<ActivitySortField>("name");
+  const [sortDirection, setSortDirection] = useState<ActivitySortDirection>("asc");
 
   const load = useCallback(async () => {
     const [pr, lv, ac] = await Promise.all([
@@ -127,6 +140,43 @@ export default function StockPage() {
     () => products.find((p) => p.id === productId),
     [products, productId],
   );
+  const visibleActivity = useMemo(() => {
+    const filtered = activity.filter((entry) => {
+      if (activityFilter === "all") return true;
+      if (activityFilter === "receive") return entry.type === "RECEIVE";
+      return entry.type === "ADJUSTMENT";
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+      let compare = 0;
+      if (sortField === "name") {
+        compare = a.product.name.localeCompare(b.product.name, undefined, { sensitivity: "base" });
+      } else if (sortField === "type") {
+        compare = activityTypeLabel(a.type).localeCompare(activityTypeLabel(b.type), undefined, {
+          sensitivity: "base",
+        });
+      } else {
+        compare = a.quantityDeltaMl - b.quantityDeltaMl;
+      }
+      return sortDirection === "asc" ? compare : -compare;
+    });
+
+    return sorted;
+  }, [activity, activityFilter, sortDirection, sortField]);
+
+  function onSort(nextField: ActivitySortField) {
+    if (sortField === nextField) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortField(nextField);
+    setSortDirection("asc");
+  }
+
+  function sortIndicator(field: ActivitySortField) {
+    if (sortField !== field) return "";
+    return sortDirection === "asc" ? " ↑" : " ↓";
+  }
 
   const bottleSizeMl = selectedLevel?.bottleSizeMl ?? Number(selectedProduct?.bottleSizeMl ?? 750);
   const currentMl = selectedLevel?.currentMl ?? 0;
@@ -561,48 +611,91 @@ export default function StockPage() {
       </div>
 
       <div className="mt-8">
-        <h2 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-          Stock Activity
-        </h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+            Stock Activity
+          </h2>
+          <div className="flex items-center gap-2">
+            {([
+              { value: "all", label: "All" },
+              { value: "receive", label: "Receive" },
+              { value: "adjust", label: "Adjust" },
+            ] as const).map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setActivityFilter(tab.value)}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                style={{
+                  background: activityFilter === tab.value ? "var(--accent-dim)" : "transparent",
+                  color: activityFilter === tab.value ? "var(--accent)" : "var(--text-secondary)",
+                  border: `1px solid ${activityFilter === tab.value ? "rgba(245,166,35,0.3)" : "var(--border)"}`,
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="overflow-hidden rounded-xl" style={{ border: "1px solid var(--border)" }}>
-          {activity.length === 0 ? (
+          {visibleActivity.length === 0 ? (
             <div className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>
               No stock movements yet
             </div>
           ) : (
-            <div className="grid">
-              {activity.map((a, i) => (
-                <div
-                  key={a.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
-                  style={{
-                    background: "var(--surface-elevated)",
-                    borderBottom: i < activity.length - 1 ? "1px solid var(--border-subtle)" : undefined,
-                  }}
-                >
-                  <div>
-                    <p className="font-medium">
-                      {a.product.name} · {a.type.replaceAll("_", " ")}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {a.reason ?? "—"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className="font-medium tabular-nums"
-                      style={{ color: a.quantityDeltaMl >= 0 ? "var(--green)" : "var(--red)" }}
-                    >
-                      {a.quantityDeltaMl >= 0 ? "+" : ""}
-                      {a.quantityDeltaMl}ml
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {new Date(a.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
+                    <button type="button" onClick={() => onSort("name")} style={{ color: "var(--text-muted)" }}>
+                      Name{sortIndicator("name")}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
+                    <button type="button" onClick={() => onSort("type")} style={{ color: "var(--text-muted)" }}>
+                      Type{sortIndicator("type")}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
+                    <button type="button" onClick={() => onSort("qty")} style={{ color: "var(--text-muted)" }}>
+                      Qty Movement{sortIndicator("qty")}
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleActivity.map((entry, i) => (
+                  <tr
+                    key={entry.id}
+                    style={{
+                      background: "var(--surface-elevated)",
+                      borderBottom:
+                        i < visibleActivity.length - 1 ? "1px solid var(--border-subtle)" : undefined,
+                    }}
+                  >
+                    <td className="px-4 py-3 font-medium">{entry.product.name}</td>
+                    <td className="px-4 py-3">
+                      <p>{activityTypeLabel(entry.type)}</p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {entry.reason ?? "—"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <p
+                        className="font-medium tabular-nums"
+                        style={{ color: entry.quantityDeltaMl >= 0 ? "var(--green)" : "var(--red)" }}
+                      >
+                        {entry.quantityDeltaMl >= 0 ? "+" : ""}
+                        {entry.quantityDeltaMl}ml
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {new Date(entry.createdAt).toLocaleString()}
+                      </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>

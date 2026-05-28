@@ -11,7 +11,7 @@ type Mapping = {
   product: { id: string; name: string };
 };
 
-const POUR_OPTIONS = [30, 60];
+const SALE_SIZE_OPTIONS = [30, 60, 750];
 
 export default function MappingsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -40,8 +40,10 @@ export default function MappingsPage() {
 
   function onProductChange(id: string) {
     setSelectedProductId(id);
-    const p = products.find((x) => x.id === id);
-    if (p) setPourMl(Number(p.defaultPourMl));
+  }
+
+  function formatSaleSize(ml: number) {
+    return ml === 750 ? "1 bottle" : `${ml}ml`;
   }
 
   function resetForm() {
@@ -91,7 +93,7 @@ export default function MappingsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold">POS Mappings</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Link POS menu item IDs to bottle SKUs with pour size (30ml / 60ml default)
+          Link POS menu item IDs to bottles with sale size (30ml, 60ml, or 1 bottle)
         </p>
       </div>
 
@@ -164,10 +166,10 @@ export default function MappingsPage() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                Pour Size (ml)
+                Sale Size
               </span>
               <div className="flex gap-2">
-                {POUR_OPTIONS.map((ml) => (
+                {SALE_SIZE_OPTIONS.map((ml) => (
                   <button
                     key={ml}
                     type="button"
@@ -179,7 +181,7 @@ export default function MappingsPage() {
                       border: `1px solid ${pourMl === ml ? "rgba(245,166,35,0.3)" : "var(--border)"}`,
                     }}
                   >
-                    {ml}ml
+                    {formatSaleSize(ml)}
                   </button>
                 ))}
                 <input
@@ -237,7 +239,7 @@ export default function MappingsPage() {
                   <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>POS Item ID</th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Bottle</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Pour</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Sale Size</th>
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Actions</th>
                   </tr>
                 </thead>
@@ -255,7 +257,7 @@ export default function MappingsPage() {
                       </td>
                       <td className="px-4 py-3 font-medium">{m.product.name}</td>
                       <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--accent)" }}>
-                        {Number(m.pourMl)}ml
+                        {formatSaleSize(Number(m.pourMl))}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
