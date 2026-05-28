@@ -27,8 +27,17 @@ export async function getBypassSession(): Promise<SessionPayload | null> {
     return cachedBypass;
   }
 
-  const tenant = await prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!tenant) return null;
+  let tenant = await prisma.tenant.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!tenant) {
+    // Testing convenience: when auth is paused on a fresh DB, create a default tenant.
+    tenant = await prisma.tenant.create({
+      data: {
+        name: "Test Venue",
+        slug: `test-venue-${Date.now().toString(36)}`,
+        posWebhookSecret: "dev-secret",
+      },
+    });
+  }
 
   cachedBypass = {
     sub: "auth-bypass",
