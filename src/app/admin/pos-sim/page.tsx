@@ -17,6 +17,18 @@ type SaleLine = {
   quantity: number;
 };
 
+type SaleHistoryItem = {
+  id: string;
+  saleId: string;
+  recordedAt: string;
+  totalMl: number;
+  lines: Array<{
+    productName: string;
+    quantity: number;
+    pourMl: number;
+  }>;
+};
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -29,6 +41,7 @@ export default function PosSimPage() {
   const [firing, setFiring] = useState(false);
   const [result, setResult] = useState<{ ok?: boolean; error?: string; idempotent?: boolean } | null>(null);
   const [lastPayload, setLastPayload] = useState<string>("");
+  const [saleHistory, setSaleHistory] = useState<SaleHistoryItem[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/pos-mappings");
@@ -134,6 +147,18 @@ export default function PosSimPage() {
     setFiring(false);
 
     if (data.ok) {
+      const historyItem: SaleHistoryItem = {
+        id: uid(),
+        saleId: payload.external_sale_id,
+        recordedAt: new Date().toISOString(),
+        totalMl,
+        lines: lines.map((l) => ({
+          productName: l.productName,
+          quantity: l.quantity,
+          pourMl: l.pourMl,
+        })),
+      };
+      setSaleHistory((prev) => [historyItem, ...prev].slice(0, 20));
       setLines([]);
     }
   }
@@ -319,6 +344,46 @@ export default function PosSimPage() {
                 {lastPayload}
               </pre>
             </details>
+          )}
+
+          {saleHistory.length > 0 && (
+            <div
+              className="rounded-xl p-4"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <h3 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                Recent Sales
+              </h3>
+              <div className="grid gap-2">
+                {saleHistory.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-lg px-3 py-2"
+                    style={{
+                      background: "var(--surface-elevated)",
+                      border: "1px solid var(--border-subtle)",
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                        {item.saleId}
+                      </span>
+                      <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {new Date(item.recordedAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {item.lines
+                        .map((l) => `${l.productName} (${l.quantity} × ${l.pourMl}ml)`)
+                        .join(" · ")}
+                    </p>
+                    <p className="mt-1 text-xs font-medium" style={{ color: "var(--accent)" }}>
+                      Deducted: {item.totalMl}ml
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>

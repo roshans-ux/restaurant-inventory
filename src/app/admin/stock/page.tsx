@@ -6,6 +6,7 @@ import { formatBottleStock, formatQuartersAndMl } from "@/lib/format-bottles";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
 
 const POUR_ML = 30;
+const ENABLE_POUR_VARIANCE_ADJUSTMENTS = false;
 
 type Product = {
   id: string;
@@ -23,6 +24,16 @@ type StockLevel = {
 };
 
 type AdjustType = "BOTTLE_BROKEN" | "SEND_BACK_TO_SELLER" | "UNDERPOUR" | "OVERPOUR";
+type VisibleAdjustType = "BOTTLE_BROKEN" | "SEND_BACK_TO_SELLER";
+
+type StockActivity = {
+  id: string;
+  type: string;
+  quantityDeltaMl: number;
+  reason: string | null;
+  createdAt: string;
+  product: { name: string };
+};
 
 function Stepper({
   value,
@@ -84,14 +95,17 @@ export default function StockPage() {
   const [saving, setSaving] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [activity, setActivity] = useState<StockActivity[]>([]);
 
   const load = useCallback(async () => {
-    const [pr, lv] = await Promise.all([
+    const [pr, lv, ac] = await Promise.all([
       fetch("/api/products").then((r) => r.json()),
       fetch("/api/inventory/levels").then((r) => r.json()),
+      fetch("/api/inventory/activity").then((r) => r.json()),
     ]);
     setProducts(pr.products ?? []);
     setLevels(lv.levels ?? []);
+    setActivity(ac.activity ?? []);
   }, []);
 
   useEffect(() => {
@@ -117,6 +131,10 @@ export default function StockPage() {
     Math.floor(currentMl / POUR_ML) * POUR_ML,
   );
   const maxFullBottlesToReturn = Math.max(0, Math.floor(currentMl / bottleSizeMl));
+  const visibleAdjustTypes: Array<{ value: VisibleAdjustType; label: string }> = [
+    { value: "BOTTLE_BROKEN", label: "Bottle broken" },
+    { value: "SEND_BACK_TO_SELLER", label: "Send back to seller" },
+  ];
 
   useEffect(() => {
     if (!productId) return;
@@ -320,10 +338,17 @@ export default function StockPage() {
                         color: "var(--text-primary)",
                       }}
                     >
-                      <option value="BOTTLE_BROKEN">Bottle broken</option>
-                      <option value="SEND_BACK_TO_SELLER">Send back to seller</option>
-                      <option value="UNDERPOUR">Underpour</option>
-                      <option value="OVERPOUR">Overpour</option>
+                      {visibleAdjustTypes.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                      {ENABLE_POUR_VARIANCE_ADJUSTMENTS && (
+                        <>
+                          <option value="UNDERPOUR">Underpour</option>
+                          <option value="OVERPOUR">Overpour</option>
+                        </>
+                      )}
                     </select>
                     <ChevronDown
                       size={13}
@@ -365,10 +390,10 @@ export default function StockPage() {
                       min={0}
                       max={maxRemainingMl}
                       step={POUR_ML}
-                      formatValue={formatQuartersAndMl}
+                      formatValue={(ml) => (ml === bottleSizeMl ? "1 bottle" : formatQuartersAndMl(ml))}
                     />
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      Removes {formatQuartersAndMl(remainingMl)} from inventory.
+                      Removes {remainingMl === bottleSizeMl ? "1 bottle" : formatQuartersAndMl(remainingMl)} from inventory.
                     </p>
                   </div>
                 )}
@@ -526,6 +551,53 @@ export default function StockPage() {
               </table>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+          Stock Activity
+        </h2>
+        <div className="overflow-hidden rounded-xl" style={{ border: "1px solid var(--border)" }}>
+          {activity.length === 0 ? (
+            <div className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>
+              No stock movements yet
+            </div>
+          ) : (
+            <div className="grid">
+              {activity.map((a, i) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    borderBottom: i < activity.length - 1 ? "1px solid var(--border-subtle)" : undefined,
+                  }}
+                >
+                  <div>
+                    <p className="font-medium">
+                      {a.product.name} · {a.type.replaceAll("_", " ")}
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {a.reason ?? "—"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className="font-medium tabular-nums"
+                      style={{ color: a.quantityDeltaMl >= 0 ? "var(--green)" : "var(--red)" }}
+                    >
+                      {a.quantityDeltaMl >= 0 ? "+" : ""}
+                      {a.quantityDeltaMl}ml
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {new Date(a.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

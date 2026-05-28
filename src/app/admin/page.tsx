@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { AlertTriangle, Package, Activity } from "lucide-react";
+import { AlertTriangle, Package } from "lucide-react";
 import Link from "next/link";
 import { formatBottleStock } from "@/lib/format-bottles";
 
@@ -19,6 +19,7 @@ type Alert = {
   message: string;
   type: string;
   createdAt: string;
+  productId: string;
   product: { name: string };
 };
 
@@ -92,6 +93,9 @@ export default function Dashboard() {
     partialSkuCount > 0
       ? `${totalFullBottles} full, ${partialSkuCount} SKU${partialSkuCount === 1 ? "" : "s"} with partial`
       : `${totalFullBottles} full`;
+  const lowAlertByProductId = new Map(
+    alerts.filter((a) => a.type === "LOW_STOCK").map((a) => [a.productId, a]),
+  );
 
   return (
     <div className="p-8">
@@ -130,6 +134,7 @@ export default function Dashboard() {
               <div className="grid gap-2">
                 {belowThreshold.map((l) => {
                   const fullInStock = Math.floor(l.currentMl / l.bottleSizeMl);
+                  const lowAlert = lowAlertByProductId.get(l.productId);
                   return (
                     <div
                       key={l.productId}
@@ -140,6 +145,11 @@ export default function Dashboard() {
                       <span className="text-right text-sm" style={{ color: "var(--red)" }}>
                         {fullInStock} {fullInStock === 1 ? "bottle" : "bottles"} in stock / {l.thresholdBottles}{" "}
                         minimum required {l.thresholdBottles === 1 ? "bottle" : "bottles"} in stock
+                        {lowAlert && (
+                          <span className="mt-0.5 block text-xs" style={{ color: "var(--text-muted)" }}>
+                            Low since {new Date(lowAlert.createdAt).toLocaleString()}
+                          </span>
+                        )}
                       </span>
                     </div>
                   );
@@ -237,33 +247,6 @@ export default function Dashboard() {
             )}
           </section>
 
-          {alerts.length > 0 && (
-            <section>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-                  <Activity size={14} />
-                  Active Alerts
-                </h2>
-                <Link href="/admin/alerts" className="text-xs" style={{ color: "var(--accent)" }}>
-                  View all →
-                </Link>
-              </div>
-              <div className="grid gap-2">
-                {alerts.slice(0, 5).map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center justify-between rounded-lg px-4 py-3"
-                    style={{ background: "var(--accent-dim)", border: "1px solid rgba(245,166,35,0.2)" }}
-                  >
-                    <span className="text-sm">{a.message}</span>
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {new Date(a.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
         </>
       )}
     </div>

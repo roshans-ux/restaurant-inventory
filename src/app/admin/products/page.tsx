@@ -21,8 +21,6 @@ type Product = {
   } | null;
 };
 
-const POUR_OPTIONS = [30, 60];
-
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -33,9 +31,7 @@ export default function ProductsPage() {
   const [skuInput, setSkuInput] = useState("");
   const [skuManualOverride, setSkuManualOverride] = useState(false);
   const [bottleSizeInput, setBottleSizeInput] = useState("750");
-  const [pourInput, setPourInput] = useState("30");
   const [thresholdInput, setThresholdInput] = useState("1");
-  const [reorderQtyInput, setReorderQtyInput] = useState("6");
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -105,10 +101,8 @@ export default function ProductsPage() {
           name: nameInput,
           sku: skuInput || undefined,
           bottleSizeMl: Number(bottleSizeInput),
-          defaultPourMl: Number(pourInput),
           openingBottles: 0,
           thresholdBottles: Math.max(0, Math.round(Number(thresholdInput) || 0)),
-          reorderQuantity: Number(reorderQtyInput),
         }),
       });
 
@@ -132,9 +126,7 @@ export default function ProductsPage() {
       setSkuInput("");
       setSkuManualOverride(false);
       setBottleSizeInput("750");
-      setPourInput("30");
       setThresholdInput("1");
-      setReorderQtyInput("6");
       setSuggestions([]);
       setShowForm(false);
       await load();
@@ -211,13 +203,11 @@ export default function ProductsPage() {
     const manual = Boolean(existingSku && existingSku.toUpperCase() !== suggested.toUpperCase());
     setSkuManualOverride(manual);
     setSkuInput(manual ? existingSku : suggested);
-    setPourInput(String(Number(product.defaultPourMl)));
     setThresholdInput(
       product.reorderConfig
         ? String(Math.round(Number(product.reorderConfig.thresholdBottles)))
         : "1",
     );
-    setReorderQtyInput(product.reorderConfig ? String(product.reorderConfig.reorderQuantity) : "6");
     setSuggestions([]);
     setShowSuggestions(false);
     setShowForm(true);
@@ -230,7 +220,7 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Bottles</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Manage bottle metadata only (SKU, size, pour, thresholds). Use Stock Entry for quantity changes.
+            Manage bottle metadata only (SKU, size, thresholds). Use Stock Entry for quantity changes.
           </p>
         </div>
         <button
@@ -244,9 +234,7 @@ export default function ProductsPage() {
             setSkuInput("");
             setSkuManualOverride(false);
             setBottleSizeInput("750");
-            setPourInput("30");
             setThresholdInput("1");
-            setReorderQtyInput("6");
             setError("");
             setShowForm(true);
           }}
@@ -399,36 +387,6 @@ export default function ProductsPage() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                Default Pour (ml)
-              </span>
-              <div className="relative">
-                <select
-                  name="defaultPourMl"
-                  value={pourInput}
-                  onChange={(e) => setPourInput(e.target.value)}
-                  className="w-full appearance-none rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    background: "var(--surface-elevated)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {POUR_OPTIONS.map((p) => (
-                    <option key={p} value={p} style={{ background: "var(--surface-elevated)" }}>
-                      {p}ml
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={13}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "var(--text-muted)" }}
-                />
-              </div>
-            </label>
-
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                 Alert Threshold (bottles)
               </span>
               <input
@@ -455,23 +413,6 @@ export default function ProductsPage() {
               />
             </label>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                Reorder Qty (bottles)
-              </span>
-              <input
-                name="reorderQuantity"
-                type="number"
-                value={reorderQtyInput}
-                onChange={(e) => setReorderQtyInput(e.target.value)}
-                className="rounded-lg px-3 py-2 text-sm outline-none"
-                style={{
-                  background: "var(--surface-elevated)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-primary)",
-                }}
-              />
-            </label>
           </div>
 
           {error && (
@@ -526,7 +467,7 @@ export default function ProductsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                {["Name", "SKU", "Bottle Size", "Default Pour", "Threshold", "Reorder Qty", "Actions"].map((h) => (
+                {["Name", "SKU", "Bottle Size", "Threshold", "Actions"].map((h) => (
                   <th
                     key={h}
                     className={`px-4 py-3 text-xs font-medium uppercase tracking-widest ${h === "Actions" ? "text-right" : "text-left"}`}
@@ -551,14 +492,10 @@ export default function ProductsPage() {
                     {p.sku ?? "—"}
                   </td>
                   <td className="px-4 py-3 tabular-nums">{formatBottleSizeLabel(Number(p.bottleSizeMl))}</td>
-                  <td className="px-4 py-3 tabular-nums">{Number(p.defaultPourMl)}ml</td>
                   <td className="px-4 py-3 tabular-nums">
                     {p.reorderConfig
                       ? `${Math.round(Number(p.reorderConfig.thresholdBottles))} bottles`
                       : "—"}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums">
-                    {p.reorderConfig ? `${p.reorderConfig.reorderQuantity} bottles` : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
