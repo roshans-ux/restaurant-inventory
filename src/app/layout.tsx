@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Restaurant Inventory",
-  description: "Alcohol inventory management with POS-driven depletion",
+  title: {
+    default: "Bar Inventory",
+    template: "%s · Bar Inventory",
+  },
+  description: "Alcohol inventory management with POS-driven depletion, built for bars",
 };
 
 export default function RootLayout({

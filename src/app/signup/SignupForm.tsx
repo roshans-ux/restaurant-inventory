@@ -4,21 +4,47 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export default function SignupForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function clearErrors() {
+    setEmailError("");
+    setPasswordError("");
+    setConfirmError("");
+    setFormError("");
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    clearErrors();
 
+    let hasError = false;
+    if (!isValidEmail(email)) {
+      setEmailError("Invalid Email");
+      hasError = true;
+    }
+    if (password.length < 8) {
+      setPasswordError("Password must be at least 8 characters");
+      hasError = true;
+    }
     if (password !== passwordConfirm) {
-      setError("Passwords do not match");
+      setConfirmError("Passwords do not match");
+      hasError = true;
+    }
+    if (hasError) {
       setLoading(false);
       return;
     }
@@ -31,12 +57,25 @@ export default function SignupForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message ?? "Sign up failed");
+        const field =
+          data.error?.details?.field ??
+          (data.error?.code === "EMAIL_IN_USE" ? "email" : undefined);
+        const message = data.error?.message ?? "Sign up failed";
+        if (field === "email") {
+          setEmailError(message);
+        } else if (field === "password") {
+          setPasswordError(message);
+        } else if (field === "passwordConfirm") {
+          setConfirmError(message);
+        } else {
+          setFormError(message);
+        }
+        return;
       }
       router.replace("/onboarding");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign up failed");
+    } catch {
+      setFormError("Sign up failed");
     } finally {
       setLoading(false);
     }
@@ -44,6 +83,7 @@ export default function SignupForm() {
 
   return (
     <form
+      noValidate
       onSubmit={onSubmit}
       className="w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
@@ -65,17 +105,24 @@ export default function SignupForm() {
           </span>
           <input
             type="email"
-            required
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError("");
+            }}
             className="rounded-lg px-3 py-2 text-sm outline-none"
             style={{
               background: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
+              border: `1px solid ${emailError ? "var(--red)" : "var(--border)"}`,
               color: "var(--text-primary)",
             }}
           />
+          {emailError && (
+            <p className="text-xs" style={{ color: "var(--red)" }}>
+              {emailError}
+            </p>
+          )}
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
@@ -83,18 +130,24 @@ export default function SignupForm() {
           </span>
           <input
             type="password"
-            required
             autoComplete="new-password"
-            minLength={8}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (passwordError) setPasswordError("");
+            }}
             className="rounded-lg px-3 py-2 text-sm outline-none"
             style={{
               background: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
+              border: `1px solid ${passwordError ? "var(--red)" : "var(--border)"}`,
               color: "var(--text-primary)",
             }}
           />
+          {passwordError && (
+            <p className="text-xs" style={{ color: "var(--red)" }}>
+              {passwordError}
+            </p>
+          )}
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
@@ -102,24 +155,30 @@ export default function SignupForm() {
           </span>
           <input
             type="password"
-            required
             autoComplete="new-password"
-            minLength={8}
             value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
+            onChange={(e) => {
+              setPasswordConfirm(e.target.value);
+              if (confirmError) setConfirmError("");
+            }}
             className="rounded-lg px-3 py-2 text-sm outline-none"
             style={{
               background: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
+              border: `1px solid ${confirmError ? "var(--red)" : "var(--border)"}`,
               color: "var(--text-primary)",
             }}
           />
+          {confirmError && (
+            <p className="text-xs" style={{ color: "var(--red)" }}>
+              {confirmError}
+            </p>
+          )}
         </label>
       </div>
 
-      {error && (
+      {formError && (
         <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>
-          {error}
+          {formError}
         </p>
       )}
 

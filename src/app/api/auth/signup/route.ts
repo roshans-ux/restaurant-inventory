@@ -9,8 +9,8 @@ import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/
 
 const signupSchema = z
   .object({
-    email: z.string().email(),
-    password: z.string().min(8),
+    email: z.string().trim().min(1, "Invalid Email").email("Invalid Email"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
     passwordConfirm: z.string().min(8),
   })
   .refine((data) => data.password === data.passwordConfirm, {
@@ -26,7 +26,9 @@ export async function POST(request: NextRequest) {
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      return apiError("EMAIL_IN_USE", "An account with this email already exists", 409);
+      return apiError("EMAIL_IN_USE", "An account with this email already exists", 409, {
+        field: "email",
+      });
     }
 
     const slugBase = slugFromRestaurantName("new-venue");
@@ -60,8 +62,9 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const message = error.issues[0]?.message ?? "Invalid signup data";
-      return apiError("INVALID_SIGNUP", message, 400);
+      const issue = error.issues[0];
+      const field = typeof issue?.path[0] === "string" ? issue.path[0] : undefined;
+      return apiError("INVALID_SIGNUP", issue?.message ?? "Invalid signup data", 400, { field });
     }
     console.error("[auth/signup]", error);
     return apiError("SIGNUP_FAILED", "Could not create account", 500);
