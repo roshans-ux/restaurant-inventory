@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import AuthPageShell from "@/components/AuthPageShell";
 import { isAuthDisabled } from "@/lib/auth/auth-flags";
 import LoginForm from "./LoginForm";
 
@@ -9,10 +10,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="flex min-h-screen items-center justify-center p-6"
-      style={{ background: "var(--background)" }}
-    >
+    <AuthPageShell>
       <Suspense
         fallback={
           <div className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -22,6 +20,6 @@ export default function LoginPage() {
       >
         <LoginForm />
       </Suspense>
-    </div>
+    </AuthPageShell>
   );
 }
