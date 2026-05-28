@@ -1,7 +1,13 @@
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { isAuthDisabled } from "@/lib/auth/auth-flags";
 import LoginForm from "./LoginForm";
 
 export default function LoginPage() {
+  if (isAuthDisabled()) {
+    redirect("/admin");
+  }
+
   return (
     <div
       className="flex min-h-screen items-center justify-center p-6"
