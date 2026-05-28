@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
-import { isAuthDisabled } from "@/lib/auth/auth-disabled";
+import { isAuthDisabled } from "@/lib/auth/auth-flags";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 
 function getSecret() {

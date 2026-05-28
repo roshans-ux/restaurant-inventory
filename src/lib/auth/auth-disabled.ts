@@ -1,9 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import type { SessionPayload } from "@/lib/auth/session";
+import { isAuthDisabled } from "@/lib/auth/auth-flags";
 
-export function isAuthDisabled(): boolean {
-  return process.env.DISABLE_AUTH === "true";
-}
+export { isAuthDisabled };
 
 let cachedBypass: SessionPayload | null = null;
 

@@ -1,5 +1,5 @@
 import AdminNav from "@/components/AdminNav";
-import { isAuthDisabled } from "@/lib/auth/auth-disabled";
+import { isAuthDisabled } from "@/lib/auth/auth-flags";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const authPaused = isAuthDisabled();
