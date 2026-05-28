@@ -63,22 +63,29 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
       style={{ borderRight: "1px solid var(--border)" }}
       className="flex h-screen w-56 flex-shrink-0 flex-col overflow-y-auto"
     >
-      <div
-        className="flex items-center gap-2 px-5 py-5"
+      <Link
+        href="/"
+        className="block px-5 py-5 transition-opacity hover:opacity-90"
         style={{ borderBottom: "1px solid var(--border)" }}
+        title="Go to home"
       >
-        <span className="text-lg" role="img" aria-label="bar">
-          🍶
-        </span>
-        <div className="min-w-0">
-          <span className="block text-sm font-semibold tracking-tight truncate" style={{ color: "var(--text-primary)" }}>
-            {venueName ?? "My Restaurant"}
+        <div className="flex items-center gap-2">
+          <span className="text-lg" role="img" aria-label="bar">
+            🍶
           </span>
-          <span className="block text-xs truncate" style={{ color: "var(--text-muted)" }}>
-            Bar Inventory
-          </span>
+          <div className="min-w-0">
+            <span
+              className="block text-sm font-semibold tracking-tight truncate"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {venueName ?? "My Restaurant"}
+            </span>
+            <span className="block text-xs truncate" style={{ color: "var(--text-muted)" }}>
+              Bar Inventory · Go to home
+            </span>
+          </div>
         </div>
-      </div>
+      </Link>
 
       <div className="flex flex-col gap-0.5 p-2 flex-1">
         {links.map(({ href, label, icon: Icon, exact }) => {
