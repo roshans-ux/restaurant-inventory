@@ -50,22 +50,16 @@ export default function VerifyEmailPanel() {
           ✉️
         </span>
         <h1 className="mt-2 text-xl font-semibold">Check your email</h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+        <p className="mt-2">
           We sent a verification link to your inbox. Open it to activate your account, then you can
           finish setup.
         </p>
       </div>
 
-      {errorMessage && (
-        <p className="mb-4 text-sm" style={{ color: "var(--red)" }}>
-          {errorMessage}
-        </p>
-      )}
+      {errorMessage && <p className="auth-error mb-4">{errorMessage}</p>}
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-          Email (to resend)
-        </span>
+        <span className="font-medium">Email (to resend)</span>
         <input
           type="email"
           value={email}
@@ -95,11 +89,8 @@ export default function VerifyEmailPanel() {
         {loading ? "Sending…" : "Resend verification email"}
       </button>
 
-      <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-        Already verified?{" "}
-        <Link href="/login" style={{ color: "var(--accent)" }}>
-          Sign in
-        </Link>
+      <p className="mt-4 text-center">
+        Already verified? <Link href="/login">Sign in</Link>
       </p>
     </div>
   );

@@ -1,11 +1,3 @@
-export type OnboardingSheetRow = {
-  email: string;
-  restaurantName: string;
-  location: string;
-  heardAboutUs: string;
-  signedUpAt: string;
-};
-
 export type BetaSignupSheetRow = {
   restaurantName: string;
   location: string;
@@ -14,6 +6,8 @@ export type BetaSignupSheetRow = {
   heardAboutUs: string;
   signedUpAt: string;
 };
+
+const BETA_SIGNUPS_TAB = "Beta Signups";
 
 async function postToSheetsWebhook(body: unknown): Promise<{ ok: boolean; skipped?: boolean }> {
   const url = process.env.GOOGLE_SHEETS_WEBHOOK_URL?.trim();
@@ -39,15 +33,11 @@ async function postToSheetsWebhook(body: unknown): Promise<{ ok: boolean; skippe
   return { ok: true };
 }
 
-/** Legacy onboarding / waitlist payload — unchanged for existing Apps Script handlers. */
-export async function appendOnboardingRow(row: OnboardingSheetRow): Promise<{ ok: boolean; skipped?: boolean }> {
-  return postToSheetsWebhook(row);
-}
-
-/** Beta signups tab — see docs/google-sheets-apps-script.md */
+/** Append a row to the Beta Signups tab — see docs/google-sheets-apps-script.md */
 export async function appendBetaSignupRow(row: BetaSignupSheetRow): Promise<{ ok: boolean; skipped?: boolean }> {
   return postToSheetsWebhook({
-    tab: "Beta Signups",
+    action: "appendBetaSignup",
+    tab: BETA_SIGNUPS_TAB,
     row: [
       row.restaurantName,
       row.location,
@@ -57,5 +47,15 @@ export async function appendBetaSignupRow(row: BetaSignupSheetRow): Promise<{ ok
       row.signedUpAt,
       "",
     ],
+  });
+}
+
+/** Set Approved column to Yes for the matching email (column C). */
+export async function markBetaSignupApproved(email: string): Promise<{ ok: boolean; skipped?: boolean }> {
+  return postToSheetsWebhook({
+    action: "approveBetaSignup",
+    tab: BETA_SIGNUPS_TAB,
+    email: email.toLowerCase().trim(),
+    approved: "Yes",
   });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildSessionPayload } from "@/lib/auth/build-session";
 import { consumeAuthToken } from "@/lib/auth/tokens";
+import { markBetaSignupApproved } from "@/lib/google-sheets";
 import {
   createSessionToken,
   getSessionFromRequest,
@@ -72,6 +73,12 @@ export async function GET(request: NextRequest) {
     data: { emailVerifiedAt: new Date() },
     include: { tenant: true },
   });
+
+  try {
+    await markBetaSignupApproved(updated.email);
+  } catch (sheetError) {
+    console.error("[admin/approve] Beta Signups sheet update failed:", sheetError);
+  }
 
   const response = htmlPage(
     "Account approved",

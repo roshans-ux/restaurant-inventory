@@ -43,15 +43,11 @@ export default function ForgotPasswordForm() {
     >
       <div className="mb-6 text-center">
         <h1 className="text-xl font-semibold">Forgot password?</h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Enter your account email and we&apos;ll send a reset link.
-        </p>
+        <p className="mt-2">Enter your account email and we&apos;ll send a reset link.</p>
       </div>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-          Email
-        </span>
+        <span className="font-medium">Email</span>
         <input
           type="email"
           required
@@ -68,15 +64,9 @@ export default function ForgotPasswordForm() {
       </label>
 
       {error && (
-        <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>
-          {error}
-        </p>
+        <p className="auth-error mt-3">{error}</p>
       )}
-      {message && (
-        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-          {message}
-        </p>
-      )}
+      {message && <p className="auth-success mt-3">{message}</p>}
 
       <button
         type="submit"
@@ -87,10 +77,8 @@ export default function ForgotPasswordForm() {
         {loading ? "Sending…" : "Send reset link"}
       </button>
 
-      <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-        <Link href="/login" style={{ color: "var(--accent)" }}>
-          Back to sign in
-        </Link>
+      <p className="mt-4 text-center">
+        <Link href="/login">Back to sign in</Link>
       </p>
     </form>
   );

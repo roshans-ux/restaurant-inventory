@@ -42,18 +42,13 @@ export default async function PendingApprovalPage() {
           ⏳
         </span>
         <h1 className="mt-3 text-xl font-semibold">We&apos;re reviewing your account</h1>
-        <p className="mt-3 text-sm" style={{ color: "#ffffff" }}>
+        <p className="mt-3">
           Thanks for completing your restaurant details. We&apos;ll approve your account and confirm on{" "}
-          <strong>{user.phone || "your phone number"}</strong>
-          {" "}
-          when it&apos;s live — usually in less than a couple of hours.
+          <strong>{user.phone || "your phone number"}</strong> when it&apos;s live — usually in less
+          than a couple of hours.
         </p>
-        <p className="mt-4 text-sm" style={{ color: "#ffffff" }}>
-          Once approved,{" "}
-          <Link href="/login" className="underline" style={{ color: "var(--accent)" }}>
-            sign in
-          </Link>{" "}
-          with the email and password you created.
+        <p className="mt-4">
+          Once approved, <Link href="/login">sign in</Link> with the email and password you created.
         </p>
       </div>
     </AuthPageShell>

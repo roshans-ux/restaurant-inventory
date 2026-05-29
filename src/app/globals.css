@@ -74,3 +74,32 @@ h6,
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* Auth shell: signup, login, onboarding, etc. */
+.auth-shell {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #ffffff;
+}
+
+.auth-shell label > span {
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.auth-shell p {
+  font-size: 14px;
+  color: #ffffff;
+}
+
+.auth-shell a {
+  color: var(--accent);
+}
+
+.auth-shell .auth-error {
+  color: var(--red);
+}
+
+.auth-shell .auth-success {
+  color: var(--green);
+}

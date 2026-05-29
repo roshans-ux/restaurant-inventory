@@ -47,11 +47,10 @@ export default function OnboardingForm() {
       <div className="mb-6">
         {justSignedUp && (
           <p
-            className="mb-4 rounded-lg px-3 py-2.5 text-sm"
+            className="auth-success mb-4 rounded-lg px-3 py-2.5"
             style={{
               background: "var(--surface-elevated)",
               border: "1px solid var(--border)",
-              color: "var(--text-secondary)",
             }}
           >
             You&apos;re signed up. Complete your restaurant details and we&apos;ll be in touch
@@ -59,14 +58,12 @@ export default function OnboardingForm() {
           </p>
         )}
         <h1 className="text-xl font-semibold">Tell us about your restaurant</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          This helps us set up your venue and improve the product.
-        </p>
+        <p className="mt-1">This helps us set up your venue and improve the product.</p>
       </div>
 
       <div className="grid gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Restaurant name
           </span>
           <input
@@ -83,7 +80,7 @@ export default function OnboardingForm() {
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Location
           </span>
           <input
@@ -100,7 +97,7 @@ export default function OnboardingForm() {
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             How did you hear about us?
           </span>
           <select
@@ -123,11 +120,7 @@ export default function OnboardingForm() {
         </label>
       </div>
 
-      {error && (
-        <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>
-          {error}
-        </p>
-      )}
+      {error && <p className="auth-error mt-3">{error}</p>}
 
       <button
         type="submit"

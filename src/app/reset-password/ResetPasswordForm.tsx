@@ -59,13 +59,9 @@ export default function ResetPasswordForm() {
         className="w-full max-w-md rounded-xl p-8 text-center"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          This reset link is invalid. Request a new one from the forgot password page.
-        </p>
-        <p className="mt-4 text-xs">
-          <Link href="/forgot-password" style={{ color: "var(--accent)" }}>
-            Forgot password
-          </Link>
+        <p>This reset link is invalid. Request a new one from the forgot password page.</p>
+        <p className="mt-4">
+          <Link href="/forgot-password">Forgot password</Link>
         </p>
       </div>
     );
@@ -79,9 +75,7 @@ export default function ResetPasswordForm() {
     >
       <div className="mb-6 text-center">
         <h1 className="text-xl font-semibold">Set a new password</h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Choose a password at least 8 characters long.
-        </p>
+        <p className="mt-2">Choose a password at least 8 characters long.</p>
       </div>
 
       <div className="grid gap-4">
@@ -125,11 +119,7 @@ export default function ResetPasswordForm() {
         </label>
       </div>
 
-      {error && (
-        <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>
-          {error}
-        </p>
-      )}
+      {error && <p className="auth-error mt-3">{error}</p>}
 
       <button
         type="submit"

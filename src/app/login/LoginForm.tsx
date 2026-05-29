@@ -80,14 +80,12 @@ export default function LoginForm() {
           🍶
         </span>
         <h1 className="mt-2 text-xl font-semibold">Bar Inventory</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Sign in to your venue admin
-        </p>
+        <p className="mt-1">Sign in to your venue admin</p>
       </div>
 
       <div className="grid gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Email
           </span>
           <input
@@ -105,7 +103,7 @@ export default function LoginForm() {
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Password
           </span>
           <input
@@ -125,23 +123,13 @@ export default function LoginForm() {
         </label>
       </div>
 
-      <p className="mt-1 text-right text-xs">
-        <Link href="/forgot-password" style={{ color: "var(--accent)" }}>
-          Forgot password?
-        </Link>
+      <p className="mt-1 text-right">
+        <Link href="/forgot-password">Forgot password?</Link>
       </p>
 
-      {info && (
-        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-          {info}
-        </p>
-      )}
+      {info && <p className="auth-success mt-3">{info}</p>}
 
-      {error && (
-        <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>
-          {error}
-        </p>
-      )}
+      {error && <p className="auth-error mt-3">{error}</p>}
 
       <button
         type="submit"
@@ -152,11 +140,8 @@ export default function LoginForm() {
         {loading ? "Signing in…" : "Sign in"}
       </button>
 
-      <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-        New here?{" "}
-        <Link href="/signup" style={{ color: "var(--accent)" }}>
-          Create an account
-        </Link>
+      <p className="mt-4 text-center">
+        New here? <Link href="/signup">Create an account</Link>
       </p>
     </form>
   );

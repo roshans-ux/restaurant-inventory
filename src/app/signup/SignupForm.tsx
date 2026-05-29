@@ -101,14 +101,12 @@ export default function SignupForm() {
           🍶
         </span>
         <h1 className="mt-2 text-xl font-semibold">Create your account</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Bar Inventory — manage your venue stock
-        </p>
+        <p className="mt-1">Bar Inventory — manage your venue stock</p>
       </div>
 
       <div className="grid gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Email
           </span>
           <input
@@ -127,13 +125,13 @@ export default function SignupForm() {
             }}
           />
           {emailError && (
-            <p className="text-xs" style={{ color: "var(--red)" }}>
+            <p className="auth-error text-sm">
               {emailError}
             </p>
           )}
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Phone number
           </span>
           <input
@@ -152,13 +150,13 @@ export default function SignupForm() {
             }}
           />
           {phoneError && (
-            <p className="text-xs" style={{ color: "var(--red)" }}>
+            <p className="auth-error text-sm">
               {phoneError}
             </p>
           )}
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Password
           </span>
           <input
@@ -177,13 +175,13 @@ export default function SignupForm() {
             }}
           />
           {passwordError && (
-            <p className="text-xs" style={{ color: "var(--red)" }}>
+            <p className="auth-error text-sm">
               {passwordError}
             </p>
           )}
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+          <span className="font-medium">
             Confirm password
           </span>
           <input
@@ -202,7 +200,7 @@ export default function SignupForm() {
             }}
           />
           {confirmError && (
-            <p className="text-xs" style={{ color: "var(--red)" }}>
+            <p className="auth-error text-sm">
               {confirmError}
             </p>
           )}
@@ -210,9 +208,7 @@ export default function SignupForm() {
       </div>
 
       {formError && (
-        <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>
-          {formError}
-        </p>
+        <p className="auth-error mt-3">{formError}</p>
       )}
 
       <button
@@ -224,16 +220,13 @@ export default function SignupForm() {
         {loading ? "Creating account…" : "Sign up"}
       </button>
 
-      <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+      <p className="mt-4 text-center">
         We are in beta right now. We will approve your account and confirm on your number when
         it&apos;s live. Usually takes less than a couple of hours.
       </p>
 
-      <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-        Already have an account?{" "}
-        <Link href="/login" style={{ color: "var(--accent)" }}>
-          Sign in
-        </Link>
+      <p className="mt-4 text-center">
+        Already have an account? <Link href="/login">Sign in</Link>
       </p>
     </form>
   );
