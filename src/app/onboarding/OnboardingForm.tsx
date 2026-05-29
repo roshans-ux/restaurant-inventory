@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { HEARD_ABOUT_OPTIONS } from "@/lib/onboarding-options";
 
 export default function OnboardingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const justSignedUp = searchParams.get("signedup") === "1";
   const [restaurantName, setRestaurantName] = useState("");
   const [location, setLocation] = useState("");
   const [heardAboutUs, setHeardAboutUs] = useState<string>(HEARD_ABOUT_OPTIONS[0]);
@@ -27,7 +29,7 @@ export default function OnboardingForm() {
       if (!res.ok) {
         throw new Error(data.error?.message ?? "Could not save details");
       }
-      router.replace("/admin");
+      router.replace("/pending-approval");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save details");
@@ -43,6 +45,19 @@ export default function OnboardingForm() {
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-6">
+        {justSignedUp && (
+          <p
+            className="mb-4 rounded-lg px-3 py-2.5 text-sm"
+            style={{
+              background: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
+              color: "var(--text-secondary)",
+            }}
+          >
+            You&apos;re signed up. Complete your restaurant details and we&apos;ll be in touch
+            shortly.
+          </p>
+        )}
         <h1 className="text-xl font-semibold">Tell us about your restaurant</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
           This helps us set up your venue and improve the product.

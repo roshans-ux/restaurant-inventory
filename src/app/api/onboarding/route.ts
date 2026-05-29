@@ -5,7 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { buildSessionPayload, slugFromRestaurantName } from "@/lib/auth/build-session";
 import { HEARD_ABOUT_OPTIONS } from "@/lib/onboarding-options";
-import { appendOnboardingRow } from "@/lib/google-sheets";
+import { appendBetaSignupRow } from "@/lib/google-sheets";
+import { createAuthToken } from "@/lib/auth/tokens";
+import { formatSignedUpAtIST } from "@/lib/datetime-ist";
+import { sendBetaSignupAlertEmail } from "@/lib/email/beta-approval-alert";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 
@@ -57,22 +60,42 @@ export async function POST(request: NextRequest) {
 
     user.tenant = updatedTenant;
 
+    const signedUpAtIst = formatSignedUpAtIST(completedAt);
+    const betaDetails = {
+      restaurantName,
+      location,
+      email: user.email,
+      phone: user.phone,
+      heardAboutUs: parsed.heardAboutUs,
+      signedUpAtIst,
+    };
+
+    const rawApprovalToken = await createAuthToken(user.id, "ACCOUNT_APPROVAL");
+
     let sheetSynced = true;
+    let alertSent = true;
     try {
-      await appendOnboardingRow({
-        email: user.email,
+      await appendBetaSignupRow({
         restaurantName,
         location,
+        email: user.email,
+        phone: user.phone,
         heardAboutUs: parsed.heardAboutUs,
-        signedUpAt: completedAt.toISOString(),
+        signedUpAt: signedUpAtIst,
       });
-    } catch (sheetError) {
+    } catch (err) {
       sheetSynced = false;
-      console.error("[onboarding] Google Sheet append failed:", sheetError);
+      console.error("[onboarding] Beta Signups sheet append failed:", err);
+    }
+    try {
+      await sendBetaSignupAlertEmail(request, betaDetails, rawApprovalToken);
+    } catch (err) {
+      alertSent = false;
+      console.error("[onboarding] beta approval alert email failed:", err);
     }
 
     const token = await createSessionToken(buildSessionPayload(user));
-    const response = NextResponse.json({ ok: true, sheetSynced });
+    const response = NextResponse.json({ ok: true, sheetSynced, alertSent });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
     return response;
   } catch (error) {

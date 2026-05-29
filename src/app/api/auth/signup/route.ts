@@ -4,16 +4,18 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { hashPassword } from "@/lib/auth/password";
-import { createAuthToken } from "@/lib/auth/tokens";
 import { buildSessionPayload, slugFromRestaurantName } from "@/lib/auth/build-session";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
-import { getAppBaseUrl } from "@/lib/email/app-url";
-import { verificationEmailContent } from "@/lib/email/messages";
-import { sendEmail } from "@/lib/email/send";
 
 const signupSchema = z
   .object({
     email: z.string().trim().min(1, "Invalid Email").email("Invalid Email"),
+    phone: z
+      .string()
+      .trim()
+      .min(7, "Enter a valid phone number")
+      .max(20, "Enter a valid phone number")
+      .regex(/^[+0-9()\-\s]+$/, "Enter a valid phone number"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     passwordConfirm: z.string().min(8),
   })
@@ -26,6 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = signupSchema.parse(await request.json());
     const email = parsed.email.toLowerCase().trim();
+    const phone = parsed.phone.trim();
     const password = parsed.password;
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -48,6 +51,7 @@ export async function POST(request: NextRequest) {
       data: {
         tenantId: tenant.id,
         email,
+        phone,
         passwordHash: hashPassword(password),
         role: "OWNER",
         emailVerifiedAt: null,
@@ -55,25 +59,10 @@ export async function POST(request: NextRequest) {
       include: { tenant: true },
     });
 
-    try {
-      const rawVerification = await createAuthToken(user.id, "EMAIL_VERIFICATION");
-      const verifyUrl = `${getAppBaseUrl(request)}/api/auth/verify-email?token=${encodeURIComponent(rawVerification)}`;
-      const content = verificationEmailContent(verifyUrl);
-      await sendEmail({ to: user.email, ...content });
-    } catch (emailError) {
-      console.error("[auth/signup] verification email failed:", emailError);
-      return apiError(
-        "EMAIL_SEND_FAILED",
-        "Account created but we could not send the verification email. Try resending from the verify page.",
-        503,
-      );
-    }
-
     const token = await createSessionToken(buildSessionPayload(user));
 
     const response = NextResponse.json({
       ok: true,
-      needsVerification: true,
       needsOnboarding: true,
       user: { email: user.email },
     });

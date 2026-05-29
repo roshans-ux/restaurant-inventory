@@ -6,7 +6,16 @@ export type OnboardingSheetRow = {
   signedUpAt: string;
 };
 
-export async function appendOnboardingRow(row: OnboardingSheetRow): Promise<{ ok: boolean; skipped?: boolean }> {
+export type BetaSignupSheetRow = {
+  restaurantName: string;
+  location: string;
+  email: string;
+  phone: string;
+  heardAboutUs: string;
+  signedUpAt: string;
+};
+
+async function postToSheetsWebhook(body: unknown): Promise<{ ok: boolean; skipped?: boolean }> {
   const url = process.env.GOOGLE_SHEETS_WEBHOOK_URL?.trim();
   if (!url) {
     if (process.env.NODE_ENV === "production") {
@@ -19,7 +28,7 @@ export async function appendOnboardingRow(row: OnboardingSheetRow): Promise<{ ok
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(row),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -28,4 +37,25 @@ export async function appendOnboardingRow(row: OnboardingSheetRow): Promise<{ ok
   }
 
   return { ok: true };
+}
+
+/** Legacy onboarding / waitlist payload — unchanged for existing Apps Script handlers. */
+export async function appendOnboardingRow(row: OnboardingSheetRow): Promise<{ ok: boolean; skipped?: boolean }> {
+  return postToSheetsWebhook(row);
+}
+
+/** Beta signups tab — see docs/google-sheets-apps-script.md */
+export async function appendBetaSignupRow(row: BetaSignupSheetRow): Promise<{ ok: boolean; skipped?: boolean }> {
+  return postToSheetsWebhook({
+    tab: "Beta Signups",
+    row: [
+      row.restaurantName,
+      row.location,
+      row.email,
+      row.phone,
+      row.heardAboutUs,
+      row.signedUpAt,
+      "",
+    ],
+  });
 }

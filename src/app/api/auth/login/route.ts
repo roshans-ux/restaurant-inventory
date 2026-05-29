@@ -27,11 +27,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user.emailVerifiedAt) {
+      const pendingApproval = user.tenant.onboardingCompletedAt != null;
       return apiError(
-        "EMAIL_NOT_VERIFIED",
-        "Verify your email before signing in. Check your inbox or resend the link.",
+        pendingApproval ? "PENDING_APPROVAL" : "EMAIL_NOT_VERIFIED",
+        pendingApproval
+          ? "Your account is awaiting approval. We will contact you on your phone number soon."
+          : "Verify your email before signing in. Check your inbox or resend the link.",
         403,
-        { email: user.email },
+        { email: user.email, pendingApproval },
       );
     }
 

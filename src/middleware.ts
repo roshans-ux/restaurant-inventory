@@ -37,6 +37,7 @@ function isPublicPath(pathname: string): boolean {
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname === "/onboarding" ||
+    pathname === "/pending-approval" ||
     pathname === "/verify-email" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password"
@@ -50,7 +51,8 @@ function isPublicPath(pathname: string): boolean {
     pathname === "/api/auth/verify-email" ||
     pathname === "/api/auth/resend-verification" ||
     pathname === "/api/auth/forgot-password" ||
-    pathname === "/api/auth/reset-password"
+    pathname === "/api/auth/reset-password" ||
+    pathname === "/api/admin/approve"
   ) {
     return true;
   }
@@ -61,9 +63,12 @@ function isPublicPath(pathname: string): boolean {
 
 function isEmailVerificationExempt(pathname: string): boolean {
   return (
+    pathname === "/onboarding" ||
+    pathname === "/pending-approval" ||
     pathname === "/verify-email" ||
     pathname === "/api/auth/verify-email" ||
     pathname === "/api/auth/resend-verification" ||
+    pathname === "/api/onboarding" ||
     pathname === "/api/auth/logout" ||
     pathname === "/api/auth/me"
   );
@@ -89,6 +94,7 @@ export async function middleware(request: NextRequest) {
       pathname === "/login" ||
       pathname === "/signup" ||
       pathname === "/onboarding" ||
+      pathname === "/pending-approval" ||
       pathname === "/verify-email" ||
       pathname === "/forgot-password" ||
       pathname === "/reset-password"
@@ -110,6 +116,9 @@ export async function middleware(request: NextRequest) {
       const dest = claims.onboardingComplete ? "/admin" : "/onboarding";
       return NextResponse.redirect(new URL(dest, request.url));
     }
+    if (claims?.valid && claims.onboardingComplete && !claims.emailVerified) {
+      return NextResponse.redirect(new URL("/pending-approval", request.url));
+    }
     return NextResponse.next();
   }
 
@@ -125,11 +134,23 @@ export async function middleware(request: NextRequest) {
     if (!claims?.valid) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
-    if (!claims.emailVerified) {
-      return NextResponse.redirect(new URL("/verify-email", request.url));
-    }
     if (claims.onboardingComplete) {
+      return NextResponse.redirect(
+        new URL(claims.emailVerified ? "/admin" : "/pending-approval", request.url),
+      );
+    }
+    return NextResponse.next();
+  }
+
+  if (pathname === "/pending-approval") {
+    if (!claims?.valid) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    if (claims.emailVerified) {
       return NextResponse.redirect(new URL("/admin", request.url));
+    }
+    if (!claims.onboardingComplete) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
     }
     return NextResponse.next();
   }
@@ -159,14 +180,18 @@ export async function middleware(request: NextRequest) {
         {
           ok: false,
           error: {
-            code: "EMAIL_NOT_VERIFIED",
-            message: "Verify your email to continue",
+            code: claims.onboardingComplete ? "PENDING_APPROVAL" : "EMAIL_NOT_VERIFIED",
+            message: claims.onboardingComplete
+              ? "Account awaiting approval"
+              : "Verify your email to continue",
           },
         },
         { status: 403 },
       );
     }
-    return NextResponse.redirect(new URL("/verify-email", request.url));
+    return NextResponse.redirect(
+      new URL(claims.onboardingComplete ? "/pending-approval" : "/verify-email", request.url),
+    );
   }
 
   if (!claims.onboardingComplete) {
@@ -195,6 +220,7 @@ export const config = {
     "/login",
     "/signup",
     "/onboarding",
+    "/pending-approval",
     "/verify-email",
     "/forgot-password",
     "/reset-password",

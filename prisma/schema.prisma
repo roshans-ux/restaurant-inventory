@@ -17,6 +17,7 @@ enum UserRole {
 enum AuthTokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+  ACCOUNT_APPROVAL
 }
 
 enum StockMovementType {
@@ -56,6 +57,7 @@ model User {
   id              String      @id @default(uuid())
   tenantId        String
   email           String
+  phone           String      @default("")
   passwordHash    String
   name            String?
   role            UserRole    @default(ADMIN)

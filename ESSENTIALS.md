@@ -61,6 +61,14 @@ Avoid double deploys: Netlify site → stop builds or delete site.
 
 Resend test sender only delivers to your Resend login email until you verify a domain.
 
+## Beta manual approval
+
+1. Partner signs up (phone required) → onboarding → **Beta Signups** sheet row + alert email to `ADMIN_ALERT_EMAIL` (default `roshan.s@brucira.com`).
+2. Click **Approve this account** in the email (or use Neon SQL fallback).
+3. Partner signs in at `/login` after approval.
+
+Update Google Apps Script per `docs/google-sheets-apps-script.md` (add **Beta Signups** tab).
+
 ## 6. Local `.env` (dev only)
 
 Copy `.env.example` → `.env`. Use same Neon `DATABASE_URL` or local `npm run db:start` URL.

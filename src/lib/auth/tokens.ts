@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 const EMAIL_VERIFICATION_HOURS = 24;
 const PASSWORD_RESET_HOURS = 1;
+const ACCOUNT_APPROVAL_DAYS = 7;
 
 export function generateRawToken(): string {
   return randomBytes(32).toString("base64url");
@@ -14,6 +15,9 @@ export function hashRawToken(token: string): string {
 }
 
 function expiresAtForType(type: AuthTokenType): Date {
+  if (type === "ACCOUNT_APPROVAL") {
+    return new Date(Date.now() + ACCOUNT_APPROVAL_DAYS * 24 * 60 * 60 * 1000);
+  }
   const hours = type === "EMAIL_VERIFICATION" ? EMAIL_VERIFICATION_HOURS : PASSWORD_RESET_HOURS;
   return new Date(Date.now() + hours * 60 * 60 * 1000);
 }

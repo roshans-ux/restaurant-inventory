@@ -41,6 +41,11 @@ export default function LoginForm() {
         );
       }
       if (!res.ok) {
+        if (data.error?.code === "PENDING_APPROVAL") {
+          router.replace("/pending-approval");
+          router.refresh();
+          return;
+        }
         if (data.error?.code === "EMAIL_NOT_VERIFIED") {
           const addr = encodeURIComponent(email.toLowerCase().trim());
           router.replace(`/verify-email?email=${addr}`);

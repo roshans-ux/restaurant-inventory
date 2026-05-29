@@ -40,12 +40,13 @@ async function main() {
     create: {
       tenantId: tenant.id,
       email: seedEmail,
+      phone: "+10000000000",
       passwordHash: hashPassword(seedPassword),
       name: "Demo Admin",
       role: UserRole.OWNER,
       emailVerifiedAt: new Date(),
     },
-    update: { emailVerifiedAt: new Date() },
+    update: { emailVerifiedAt: new Date(), phone: "+10000000000" },
   });
 
   console.log(`  Venue: ${tenant.name} (${tenant.slug})`);

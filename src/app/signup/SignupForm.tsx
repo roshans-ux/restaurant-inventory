@@ -11,9 +11,11 @@ function isValidEmail(value: string) {
 export default function SignupForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [confirmError, setConfirmError] = useState("");
   const [formError, setFormError] = useState("");
@@ -21,6 +23,7 @@ export default function SignupForm() {
 
   function clearErrors() {
     setEmailError("");
+    setPhoneError("");
     setPasswordError("");
     setConfirmError("");
     setFormError("");
@@ -34,6 +37,11 @@ export default function SignupForm() {
     let hasError = false;
     if (!isValidEmail(email)) {
       setEmailError("Invalid Email");
+      hasError = true;
+    }
+    const phoneTrimmed = phone.trim();
+    if (phoneTrimmed.length < 7 || !/^[+0-9()\-\s]+$/.test(phoneTrimmed)) {
+      setPhoneError("Enter a valid phone number");
       hasError = true;
     }
     if (password.length < 8) {
@@ -53,16 +61,16 @@ export default function SignupForm() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, passwordConfirm }),
+        body: JSON.stringify({ email, phone: phoneTrimmed, password, passwordConfirm }),
       });
       const data = await res.json();
       if (!res.ok) {
-        const field =
-          data.error?.details?.field ??
-          (data.error?.code === "EMAIL_IN_USE" ? "email" : undefined);
+        const field = data.error?.details?.field;
         const message = data.error?.message ?? "Sign up failed";
-        if (field === "email") {
+        if (field === "email" || data.error?.code === "EMAIL_IN_USE") {
           setEmailError(message);
+        } else if (field === "phone") {
+          setPhoneError(message);
         } else if (field === "password") {
           setPasswordError(message);
         } else if (field === "passwordConfirm") {
@@ -72,8 +80,7 @@ export default function SignupForm() {
         }
         return;
       }
-      const verifiedEmail = encodeURIComponent(email.toLowerCase().trim());
-      router.replace(`/verify-email?email=${verifiedEmail}`);
+      router.replace("/onboarding?signedup=1");
       router.refresh();
     } catch {
       setFormError("Sign up failed");
@@ -122,6 +129,31 @@ export default function SignupForm() {
           {emailError && (
             <p className="text-xs" style={{ color: "var(--red)" }}>
               {emailError}
+            </p>
+          )}
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+            Phone number
+          </span>
+          <input
+            type="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              if (phoneError) setPhoneError("");
+            }}
+            className="rounded-lg px-3 py-2 text-sm outline-none"
+            style={{
+              background: "var(--surface-elevated)",
+              border: `1px solid ${phoneError ? "var(--red)" : "var(--border)"}`,
+              color: "var(--text-primary)",
+            }}
+          />
+          {phoneError && (
+            <p className="text-xs" style={{ color: "var(--red)" }}>
+              {phoneError}
             </p>
           )}
         </label>
@@ -191,6 +223,11 @@ export default function SignupForm() {
       >
         {loading ? "Creating account…" : "Sign up"}
       </button>
+
+      <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+        We are in beta right now. We will approve your account and confirm on your number when
+        it&apos;s live. Usually takes less than a couple of hours.
+      </p>
 
       <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
         Already have an account?{" "}
