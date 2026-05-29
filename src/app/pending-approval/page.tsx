@@ -25,7 +25,7 @@ export default async function PendingApprovalPage() {
   }
 
   if (user.emailVerifiedAt) {
-    redirect("/admin");
+    redirect("/api/auth/refresh-session?next=/admin");
   }
 
   if (!user.tenant.onboardingCompletedAt) {
@@ -42,14 +42,16 @@ export default async function PendingApprovalPage() {
           ⏳
         </span>
         <h1 className="mt-3 text-xl font-semibold">We&apos;re reviewing your account</h1>
-        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+        <p className="mt-3 text-sm" style={{ color: "#ffffff" }}>
           Thanks for completing your restaurant details. We&apos;ll approve your account and confirm on{" "}
-          <strong>{user.phone}</strong> when it&apos;s live — usually in less than a couple of hours.
+          <strong>{user.phone || "your phone number"}</strong>
+          {" "}
+          when it&apos;s live — usually in less than a couple of hours.
         </p>
-        <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>
-          Once approved, sign in at{" "}
-          <Link href="/login" style={{ color: "var(--accent)" }}>
-            /login
+        <p className="mt-4 text-sm" style={{ color: "#ffffff" }}>
+          Once approved,{" "}
+          <Link href="/login" className="underline" style={{ color: "var(--accent)" }}>
+            sign in
           </Link>{" "}
           with the email and password you created.
         </p>

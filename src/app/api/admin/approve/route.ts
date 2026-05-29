@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildSessionPayload } from "@/lib/auth/build-session";
 import { consumeAuthToken } from "@/lib/auth/tokens";
+import {
+  createSessionToken,
+  getSessionFromRequest,
+  sessionCookieOptions,
+  SESSION_COOKIE,
+} from "@/lib/auth/session";
 
 function htmlPage(title: string, body: string, ok: boolean) {
   const html = `<!DOCTYPE html>
@@ -60,14 +67,23 @@ export async function GET(request: NextRequest) {
     return htmlPage("User not found", "No account matches this approval token.", false);
   }
 
-  await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: user.id },
     data: { emailVerifiedAt: new Date() },
+    include: { tenant: true },
   });
 
-  return htmlPage(
+  const response = htmlPage(
     "Account approved",
-    `${user.email} (${user.tenant.name}) can sign in now. Contact them on ${user.phone} when ready.`,
+    `${updated.email} (${updated.tenant.name}) can sign in now. Contact them on ${updated.phone || "their phone"} when ready.`,
     true,
   );
+
+  const session = await getSessionFromRequest(request);
+  if (session?.sub === updated.id) {
+    const token = await createSessionToken(buildSessionPayload(updated));
+    response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+  }
+
+  return response;
 }
