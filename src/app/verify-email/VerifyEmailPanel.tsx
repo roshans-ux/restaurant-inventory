@@ -42,7 +42,7 @@ export default function VerifyEmailPanel() {
 
   return (
     <div
-      className="w-full max-w-md rounded-xl p-8"
+      className="auth-copy w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-6 text-center">
@@ -68,16 +68,11 @@ export default function VerifyEmailPanel() {
           style={{
             background: "var(--surface-elevated)",
             border: "1px solid var(--border)",
-            color: "var(--text-primary)",
           }}
         />
       </label>
 
-      {message && (
-        <p className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-          {message}
-        </p>
-      )}
+      {message && <p className="auth-success mt-3">{message}</p>}
 
       <button
         type="button"

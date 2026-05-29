@@ -9,7 +9,7 @@ export default function AuthPageShell({ children }: { children: React.ReactNode 
       <div className="absolute left-0 top-0 z-10 p-6">
         <GoHomeLink />
       </div>
-      <div className="auth-shell flex flex-1 items-center justify-center p-6 pt-16">{children}</div>
+      <div className="auth-copy flex flex-1 items-center justify-center p-6 pt-16">{children}</div>
     </div>
   );
 }

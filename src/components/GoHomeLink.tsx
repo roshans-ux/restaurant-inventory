@@ -9,7 +9,7 @@ export default function GoHomeLink({ className = "" }: GoHomeLinkProps) {
   return (
     <Link
       href="/"
-      className={`inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80 ${className}`}
+      className={`auth-copy inline-flex items-center gap-1.5 font-medium transition-opacity hover:opacity-80 ${className}`}
       style={{ color: "#ffffff" }}
     >
       <ArrowLeft size={15} strokeWidth={2} aria-hidden />

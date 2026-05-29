@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -93,7 +94,7 @@ export default function SignupForm() {
     <form
       noValidate
       onSubmit={onSubmit}
-      className="w-full max-w-md rounded-xl p-8"
+      className="auth-copy w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-6 text-center">
@@ -121,7 +122,6 @@ export default function SignupForm() {
             style={{
               background: "var(--surface-elevated)",
               border: `1px solid ${emailError ? "var(--red)" : "var(--border)"}`,
-              color: "var(--text-primary)",
             }}
           />
           {emailError && (
@@ -146,7 +146,6 @@ export default function SignupForm() {
             style={{
               background: "var(--surface-elevated)",
               border: `1px solid ${phoneError ? "var(--red)" : "var(--border)"}`,
-              color: "var(--text-primary)",
             }}
           />
           {phoneError && (
@@ -159,19 +158,13 @@ export default function SignupForm() {
           <span className="font-medium">
             Password
           </span>
-          <input
-            type="password"
+          <PasswordInput
             autoComplete="new-password"
             value={password}
+            hasError={!!passwordError}
             onChange={(e) => {
               setPassword(e.target.value);
               if (passwordError) setPasswordError("");
-            }}
-            className="rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: "var(--surface-elevated)",
-              border: `1px solid ${passwordError ? "var(--red)" : "var(--border)"}`,
-              color: "var(--text-primary)",
             }}
           />
           {passwordError && (
@@ -184,19 +177,13 @@ export default function SignupForm() {
           <span className="font-medium">
             Confirm password
           </span>
-          <input
-            type="password"
+          <PasswordInput
             autoComplete="new-password"
             value={passwordConfirm}
+            hasError={!!confirmError}
             onChange={(e) => {
               setPasswordConfirm(e.target.value);
               if (confirmError) setConfirmError("");
-            }}
-            className="rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: "var(--surface-elevated)",
-              border: `1px solid ${confirmError ? "var(--red)" : "var(--border)"}`,
-              color: "var(--text-primary)",
             }}
           />
           {confirmError && (

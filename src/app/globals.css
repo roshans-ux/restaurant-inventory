@@ -75,31 +75,37 @@ h6,
   background: var(--text-muted);
 }
 
-/* Auth shell: signup, login, onboarding, etc. */
-.auth-shell {
+/* Auth screens: signup, login, onboarding, pending approval, etc. */
+.auth-copy {
   font-size: 14px;
   line-height: 1.5;
   color: #ffffff;
 }
 
-.auth-shell label > span {
+.auth-copy label > span {
   font-size: 14px;
   color: #ffffff;
 }
 
-.auth-shell p {
+.auth-copy p {
   font-size: 14px;
   color: #ffffff;
 }
 
-.auth-shell a {
+.auth-copy a {
   color: var(--accent);
 }
 
-.auth-shell .auth-error {
+.auth-copy input,
+.auth-copy select,
+.auth-copy textarea {
+  color: #ffffff;
+}
+
+.auth-copy .auth-error {
   color: var(--red);
 }
 
-.auth-shell .auth-success {
+.auth-copy .auth-success {
   color: var(--green);
 }

@@ -41,7 +41,7 @@ export default function OnboardingForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-md rounded-xl p-8"
+      className="auth-copy w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-6">
@@ -75,7 +75,6 @@ export default function OnboardingForm() {
             style={{
               background: "var(--surface-elevated)",
               border: "1px solid var(--border)",
-              color: "var(--text-primary)",
             }}
           />
         </label>
@@ -92,7 +91,6 @@ export default function OnboardingForm() {
             style={{
               background: "var(--surface-elevated)",
               border: "1px solid var(--border)",
-              color: "var(--text-primary)",
             }}
           />
         </label>
@@ -108,7 +106,6 @@ export default function OnboardingForm() {
             style={{
               background: "var(--surface-elevated)",
               border: "1px solid var(--border)",
-              color: "var(--text-primary)",
             }}
           >
             {HEARD_ABOUT_OPTIONS.map((opt) => (

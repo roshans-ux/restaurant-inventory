@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -72,7 +73,7 @@ export default function LoginForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-md rounded-xl p-8"
+      className="auth-copy w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-6 text-center">
@@ -98,7 +99,6 @@ export default function LoginForm() {
             style={{
               background: "var(--surface-elevated)",
               border: "1px solid var(--border)",
-              color: "var(--text-primary)",
             }}
           />
         </label>
@@ -106,19 +106,12 @@ export default function LoginForm() {
           <span className="font-medium">
             Password
           </span>
-          <input
-            type="password"
+          <PasswordInput
             required
             autoComplete="current-password"
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
           />
         </label>
       </div>

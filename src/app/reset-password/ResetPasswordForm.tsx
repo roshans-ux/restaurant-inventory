@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import PasswordInput from "@/components/PasswordInput";
 
 export default function ResetPasswordForm() {
   const router = useRouter();
@@ -56,7 +57,7 @@ export default function ResetPasswordForm() {
   if (!token) {
     return (
       <div
-        className="w-full max-w-md rounded-xl p-8 text-center"
+        className="auth-copy w-full max-w-md rounded-xl p-8 text-center"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
         <p>This reset link is invalid. Request a new one from the forgot password page.</p>
@@ -70,7 +71,7 @@ export default function ResetPasswordForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-md rounded-xl p-8"
+      className="auth-copy w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-6 text-center">
@@ -80,41 +81,23 @@ export default function ResetPasswordForm() {
 
       <div className="grid gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-            New password
-          </span>
-          <input
-            type="password"
+          <span className="font-medium">New password</span>
+          <PasswordInput
             required
             minLength={8}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-            Confirm password
-          </span>
-          <input
-            type="password"
+          <span className="font-medium">Confirm password</span>
+          <PasswordInput
             required
             minLength={8}
             autoComplete="new-password"
             value={passwordConfirm}
             onChange={(e) => setPasswordConfirm(e.target.value)}
-            className="rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: "var(--surface-elevated)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
           />
         </label>
       </div>

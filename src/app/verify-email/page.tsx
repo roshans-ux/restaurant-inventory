@@ -13,9 +13,7 @@ export default function VerifyEmailPage() {
     <AuthPageShell>
       <Suspense
         fallback={
-          <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Loading…
-          </div>
+          <div className="auth-copy">Loading…</div>
         }
       >
         <VerifyEmailPanel />

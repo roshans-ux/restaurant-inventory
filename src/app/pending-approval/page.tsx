@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export default async function PendingApprovalPage() {
   if (isAuthDisabled()) {
     redirect("/admin");
@@ -35,7 +37,7 @@ export default async function PendingApprovalPage() {
   return (
     <AuthPageShell>
       <div
-        className="w-full max-w-md rounded-xl p-8 text-center"
+        className="auth-copy w-full max-w-md rounded-xl p-8 text-center"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
         <span className="text-3xl" role="img" aria-label="hourglass">
@@ -44,11 +46,20 @@ export default async function PendingApprovalPage() {
         <h1 className="mt-3 text-xl font-semibold">We&apos;re reviewing your account</h1>
         <p className="mt-3">
           Thanks for completing your restaurant details. We&apos;ll approve your account and confirm on{" "}
-          <strong>{user.phone || "your phone number"}</strong> when it&apos;s live — usually in less
-          than a couple of hours.
+          <strong>{user.phone || "your phone number"}</strong>
+          {" "}
+          when it&apos;s live — usually in less than a couple of hours.
         </p>
         <p className="mt-4">
-          Once approved, <Link href="/login">sign in</Link> with the email and password you created.
+          Once approved,{" "}
+          <Link href="/api/auth/refresh-session?next=/admin" className="underline">
+            continue to the app
+          </Link>{" "}
+          or{" "}
+          <Link href="/login" className="underline">
+            sign in
+          </Link>{" "}
+          again.
         </p>
       </div>
     </AuthPageShell>

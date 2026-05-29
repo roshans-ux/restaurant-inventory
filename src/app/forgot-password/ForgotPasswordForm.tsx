@@ -38,7 +38,7 @@ export default function ForgotPasswordForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-md rounded-xl p-8"
+      className="auth-copy w-full max-w-md rounded-xl p-8"
       style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
     >
       <div className="mb-6 text-center">
@@ -58,7 +58,6 @@ export default function ForgotPasswordForm() {
           style={{
             background: "var(--surface-elevated)",
             border: "1px solid var(--border)",
-            color: "var(--text-primary)",
           }}
         />
       </label>
