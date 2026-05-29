@@ -19,6 +19,16 @@ UPDATE "User" SET "emailVerifiedAt" = NOW() WHERE "emailVerifiedAt" IS NULL;
 
 Build settings are in `vercel.json` (Prisma `db push` + `next build`, Node 20 in Vercel → Settings → General).
 
+## Testing workflow (after Vercel is live)
+
+| When | Where |
+|------|--------|
+| Day-to-day coding | **Local** — `npm run dev:local` |
+| Email links in dev | Terminal log (no `RESEND_API_KEY`) or Resend test sender |
+| Go live | Push to `main` → Vercel auto-deploys (~once/day, often after 4 PM) |
+
+**Database:** stay on **Neon** (same `DATABASE_URL` for local and Vercel). Supabase is optional later; migration is not needed for testing speed.
+
 ## Optional
 
 - **Custom domain:** Vercel → Domains → add domain → update `APP_URL` → redeploy.

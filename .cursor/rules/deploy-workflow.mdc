@@ -1,0 +1,29 @@
+---
+description: Local-first dev; optional daily Vercel deploy after 4 PM
+alwaysApply: true
+---
+
+# Deploy workflow
+
+## Default: local testing
+
+- Run and test changes locally (`npm run dev` or `npm run dev:local`) before any production deploy.
+- Do not push to GitHub or suggest Vercel deploy unless the user asks for "live", "deploy", "push to production", or similar.
+
+## Daily check-in (~4 PM)
+
+When the user starts or continues work in a session and local time is **4:00 PM or later** (use their timezone if known; otherwise assume US local), ask once per day:
+
+> Want to take today's changes live on Vercel? (yes / no)
+
+- If **no**: continue local-only; do not push for deploy.
+- If **yes**: confirm env vars (`APP_URL`, `DATABASE_URL`, etc.), then push to `main` if there are unpushed commits so Vercel auto-deploys.
+
+## Database
+
+- Production uses **Neon** (`DATABASE_URL`). Do not migrate to Supabase unless the user explicitly requests it.
+
+## Production host
+
+- **Vercel** is production. Netlify is deprecated for this project.
+- Guide: `DEPLOY-VERCEL.md`
