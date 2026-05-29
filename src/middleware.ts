@@ -53,6 +53,8 @@ function isPublicPath(pathname: string): boolean {
     pathname === "/api/auth/forgot-password" ||
     pathname === "/api/auth/reset-password" ||
     pathname === "/api/auth/refresh-session" ||
+    pathname === "/api/auth/approval-status" ||
+    pathname === "/api/auth/logout" ||
     pathname === "/api/admin/approve"
   ) {
     return true;
@@ -71,6 +73,7 @@ function isEmailVerificationExempt(pathname: string): boolean {
     pathname === "/api/auth/resend-verification" ||
     pathname === "/api/onboarding" ||
     pathname === "/api/auth/logout" ||
+    pathname === "/api/auth/approval-status" ||
     pathname === "/api/auth/me"
   );
 }

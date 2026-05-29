@@ -1,5 +1,5 @@
-import Link from "next/link";
 import AuthPageShell from "@/components/AuthPageShell";
+import PendingApprovalActions from "./PendingApprovalActions";
 import { isAuthDisabled } from "@/lib/auth/auth-flags";
 import { redirect } from "next/navigation";
 import { getSessionFromCookies } from "@/lib/auth/session";
@@ -50,17 +50,7 @@ export default async function PendingApprovalPage() {
           {" "}
           when it&apos;s live — usually in less than a couple of hours.
         </p>
-        <p className="mt-4">
-          Once approved,{" "}
-          <Link href="/api/auth/refresh-session?next=/admin" className="underline">
-            continue to the app
-          </Link>{" "}
-          or{" "}
-          <Link href="/login" className="underline">
-            sign in
-          </Link>{" "}
-          again.
-        </p>
+        <PendingApprovalActions />
       </div>
     </AuthPageShell>
   );
