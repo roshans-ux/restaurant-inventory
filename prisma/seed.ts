@@ -55,7 +55,13 @@ async function main() {
 
   for (const spirit of SPIRITS) {
     const product = await prisma.product.upsert({
-      where: { tenantId_name: { tenantId: tenant.id, name: spirit.name } },
+      where: {
+        tenantId_name_bottleSizeMl: {
+          tenantId: tenant.id,
+          name: spirit.name,
+          bottleSizeMl: spirit.bottleSizeMl,
+        },
+      },
       create: {
         tenantId: tenant.id,
         name: spirit.name,

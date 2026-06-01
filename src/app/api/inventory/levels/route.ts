@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { sumStockMovementMl } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
           _sum: { quantityDeltaMl: true },
         });
 
-        const currentMl = sum._sum.quantityDeltaMl ?? 0;
+        const currentMl = sumStockMovementMl(sum);
         const currentBottles = currentMl / Number(product.bottleSizeMl);
 
         return {

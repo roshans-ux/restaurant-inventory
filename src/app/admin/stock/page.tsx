@@ -2,15 +2,25 @@
 
 import { useEffect, useState, FormEvent, useCallback, useMemo } from "react";
 import { PackagePlus, Minus, ChevronDown } from "lucide-react";
+import AddBottleModal from "@/components/admin/AddBottleModal";
+import BottleSelectDropdown from "@/components/admin/BottleSelectDropdown";
+import StockActivityTable from "@/components/admin/StockActivityTable";
+import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
+import {
+  getBottleBrokenDisplayName,
+  getBottleBrokenMlSteps,
+} from "@/lib/bottle-broken-display";
 import { formatBottleStock, formatQuartersAndMl } from "@/lib/format-bottles";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
 
 const POUR_ML = 30;
 const ENABLE_POUR_VARIANCE_ADJUSTMENTS = false;
+const LEVELS_PANEL_HEIGHT = "lg:h-[520px]";
 
 type Product = {
   id: string;
   name: string;
+  sku: string | null;
   bottleSizeMl: string;
 };
 
@@ -41,31 +51,8 @@ type ActivityResponse = {
   };
 };
 
-type ActivityFilter = "all" | "receive" | "adjust";
-type ActivitySortField = "name" | "type" | "qty" | "dateTime";
-type ActivitySortDirection = "asc" | "desc";
-
-function activityTypeLabel(type: string) {
-  if (type === "RECEIVE") return "Receive stock";
-  if (type === "ADJUSTMENT") return "Adjustment";
-  return type.replaceAll("_", " ");
-}
-
-function formatActivityDate(value: string) {
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatActivityTime(value: string) {
-  return new Date(value).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
+type LevelsSortField = "name" | "stock" | "threshold" | "ml";
+type SortDirection = "asc" | "desc";
 
 function Stepper({
   value,
@@ -73,26 +60,63 @@ function Stepper({
   min,
   max,
   step,
+  steps,
   suffix,
   formatValue,
 }: {
   value: number;
   onChange: (v: number) => void;
-  min: number;
-  max: number;
-  step: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** When set, +/- move through these ml values (e.g. bottle broken lookup keys). */
+  steps?: number[];
   suffix?: string;
   /** When set, shown instead of raw value + suffix (e.g. quarters + ml). */
   formatValue?: (value: number) => string;
 }) {
   const display = formatValue ? formatValue(value) : `${value}${suffix ?? ""}`;
 
+  const useStepList = steps != null && steps.length > 0;
+  const stepIndex = useStepList
+    ? (() => {
+        const exact = steps.indexOf(value);
+        if (exact >= 0) return exact;
+        let best = 0;
+        for (let i = 0; i < steps.length; i++) {
+          if (steps[i] <= value) best = i;
+          else break;
+        }
+        return best;
+      })()
+    : -1;
+  const atMin = useStepList ? stepIndex <= 0 : value <= (min ?? 0);
+  const atMax = useStepList
+    ? stepIndex >= steps.length - 1
+    : value >= (max ?? value);
+
+  function decrement() {
+    if (useStepList) {
+      onChange(steps[Math.max(0, stepIndex - 1)]);
+      return;
+    }
+    onChange(Math.max(min ?? 0, value - (step ?? 1)));
+  }
+
+  function increment() {
+    if (useStepList) {
+      onChange(steps[Math.min(steps.length - 1, stepIndex + 1)]);
+      return;
+    }
+    onChange(Math.min(max ?? value, value + (step ?? 1)));
+  }
+
   return (
     <div className="flex items-center gap-2">
       <button
         type="button"
-        onClick={() => onChange(Math.max(min, value - step))}
-        disabled={value <= min}
+        onClick={decrement}
+        disabled={atMin}
         className="rounded-lg border px-3 py-2 text-sm disabled:opacity-40"
         style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
       >
@@ -103,8 +127,8 @@ function Stepper({
       </span>
       <button
         type="button"
-        onClick={() => onChange(Math.min(max, value + step))}
-        disabled={value >= max}
+        onClick={increment}
+        disabled={atMax}
         className="rounded-lg border px-3 py-2 text-sm disabled:opacity-40"
         style={{ borderColor: "var(--border)", color: "var(--text-secondary)" }}
       >
@@ -128,9 +152,11 @@ export default function StockPage() {
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [activity, setActivity] = useState<StockActivity[]>([]);
-  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  const [sortField, setSortField] = useState<ActivitySortField>("name");
-  const [sortDirection, setSortDirection] = useState<ActivitySortDirection>("asc");
+  const [showAddBottleModal, setShowAddBottleModal] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [levelsSortField, setLevelsSortField] = useState<LevelsSortField>("name");
+  const [levelsSortDirection, setLevelsSortDirection] = useState<SortDirection>("asc");
+  const [levelsSearch, setLevelsSearch] = useState("");
 
   const load = useCallback(async () => {
     const [pr, lv, ac] = await Promise.all([
@@ -156,44 +182,57 @@ export default function StockPage() {
     () => products.find((p) => p.id === productId),
     [products, productId],
   );
-  const visibleActivity = useMemo(() => {
-    const filtered = activity.filter((entry) => {
-      if (activityFilter === "all") return true;
-      if (activityFilter === "receive") return entry.type === "RECEIVE";
-      return entry.type === "ADJUSTMENT";
-    });
 
-    const sorted = [...filtered].sort((a, b) => {
+  const visibleLevels = useMemo(() => {
+    const query = levelsSearch.trim().toLowerCase();
+    let rows = levels;
+    if (query) {
+      rows = rows.filter((l) => {
+        const sizeLabel = formatBottleSizeLabel(l.bottleSizeMl).toLowerCase();
+        return l.name.toLowerCase().includes(query) || sizeLabel.includes(query);
+      });
+    }
+
+    return [...rows].sort((a, b) => {
       let compare = 0;
-      if (sortField === "name") {
-        compare = a.product.name.localeCompare(b.product.name, undefined, { sensitivity: "base" });
-      } else if (sortField === "type") {
-        compare = activityTypeLabel(a.type).localeCompare(activityTypeLabel(b.type), undefined, {
-          sensitivity: "base",
-        });
-      } else if (sortField === "dateTime") {
-        compare = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (levelsSortField === "name") {
+        compare = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      } else if (levelsSortField === "stock") {
+        const aFull = Math.floor(a.currentMl / a.bottleSizeMl);
+        const bFull = Math.floor(b.currentMl / b.bottleSizeMl);
+        compare = aFull - bFull;
+      } else if (levelsSortField === "threshold") {
+        const aThreshold = a.thresholdBottles ?? Number.MAX_SAFE_INTEGER;
+        const bThreshold = b.thresholdBottles ?? Number.MAX_SAFE_INTEGER;
+        compare = aThreshold - bThreshold;
       } else {
-        compare = a.quantityDeltaMl - b.quantityDeltaMl;
+        compare = a.currentMl - b.currentMl;
       }
-      return sortDirection === "asc" ? compare : -compare;
+      return levelsSortDirection === "asc" ? compare : -compare;
     });
+  }, [levels, levelsSearch, levelsSortDirection, levelsSortField]);
 
-    return sorted;
-  }, [activity, activityFilter, sortDirection, sortField]);
-
-  function onSort(nextField: ActivitySortField) {
-    if (sortField === nextField) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+  function onLevelsSort(field: LevelsSortField) {
+    if (levelsSortField === field) {
+      setLevelsSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
       return;
     }
-    setSortField(nextField);
-    setSortDirection("asc");
+    setLevelsSortField(field);
+    setLevelsSortDirection("asc");
   }
 
-  function sortIndicator(field: ActivitySortField) {
-    if (sortField !== field) return "";
-    return sortDirection === "asc" ? " ↑" : " ↓";
+  function levelsHeaderButton(field: LevelsSortField, label: string, align: "left" | "right" = "left") {
+    return (
+      <button
+        type="button"
+        onClick={() => onLevelsSort(field)}
+        className={`inline-flex items-center gap-1 ${align === "right" ? "ml-auto" : ""}`}
+        style={{ color: "var(--text-muted)" }}
+      >
+        {label}
+        <SortHeaderIcon active={levelsSortField === field} direction={levelsSortDirection} />
+      </button>
+    );
   }
 
   const bottleSizeMl = selectedLevel?.bottleSizeMl ?? Number(selectedProduct?.bottleSizeMl ?? 750);
@@ -205,6 +244,10 @@ export default function StockPage() {
     Math.floor(currentMl / POUR_ML) * POUR_ML,
   );
   const maxFullBottlesToReturn = Math.max(0, Math.floor(currentMl / bottleSizeMl));
+  const bottleBrokenSteps = useMemo(
+    () => getBottleBrokenMlSteps(bottleSizeMl).filter((ml) => ml <= maxRemainingMl),
+    [bottleSizeMl, maxRemainingMl],
+  );
   const visibleAdjustTypes: Array<{ value: VisibleAdjustType; label: string }> = [
     { value: "BOTTLE_BROKEN", label: "Bottle broken" },
     { value: "SEND_BACK_TO_SELLER", label: "Send back to seller" },
@@ -213,12 +256,26 @@ export default function StockPage() {
   useEffect(() => {
     if (!productId) return;
     setBottlesToReturn(0);
-    setRemainingMl(Math.min(maxRemainingMl, bottleSizeMl));
+    const steps = getBottleBrokenMlSteps(bottleSizeMl).filter((ml) => ml <= maxRemainingMl);
+    setRemainingMl(steps.at(-1) ?? steps[0] ?? 0);
     setVariancePours(1);
   }, [productId, currentBottles, maxRemainingMl, bottleSizeMl]);
 
+  useEffect(() => {
+    if (!productId || bottleBrokenSteps.length === 0) return;
+    if (bottleBrokenSteps.includes(remainingMl)) return;
+    const snapped =
+      [...bottleBrokenSteps].reverse().find((ml) => ml <= remainingMl) ?? bottleBrokenSteps[0];
+    setRemainingMl(snapped);
+  }, [productId, bottleBrokenSteps, remainingMl]);
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setSubmitAttempted(true);
+    if (!productId) {
+      setError("Select a bottle");
+      return;
+    }
     setSaving(true);
     setError("");
     setLastResult(null);
@@ -312,10 +369,10 @@ export default function StockPage() {
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
         <form
           onSubmit={onSubmit}
-          className="rounded-xl p-6"
+          className="self-start rounded-xl p-6 lg:max-h-[520px] lg:overflow-y-auto"
           style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         >
           <div className="mb-4 flex gap-2">
@@ -346,31 +403,13 @@ export default function StockPage() {
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                 Bottle
               </span>
-              <div className="relative">
-                <select
-                  required
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  className="w-full appearance-none rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    background: "var(--surface-elevated)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  <option value="">Select bottle…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({formatBottleSizeLabel(Number(p.bottleSizeMl))})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={13}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "var(--text-muted)" }}
-                />
-              </div>
+              <BottleSelectDropdown
+                products={products}
+                value={productId}
+                onChange={setProductId}
+                onAddNew={() => setShowAddBottleModal(true)}
+                showError={submitAttempted}
+              />
             </label>
 
             {mode === "receive" && (
@@ -456,18 +495,16 @@ export default function StockPage() {
                 {adjustType === "BOTTLE_BROKEN" && productId && (
                   <div className="flex flex-col gap-2">
                     <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                      Estimated remaining before break (30ml steps, 180ml = 1 quarter)
+                      Estimated remaining before break (30ml steps)
                     </span>
                     <Stepper
                       value={remainingMl}
                       onChange={setRemainingMl}
-                      min={0}
-                      max={maxRemainingMl}
-                      step={POUR_ML}
-                      formatValue={(ml) => (ml === bottleSizeMl ? "1 bottle" : formatQuartersAndMl(ml))}
+                      steps={bottleBrokenSteps}
+                      formatValue={(ml) => getBottleBrokenDisplayName(ml, bottleSizeMl)}
                     />
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      Removes {remainingMl === bottleSizeMl ? "1 bottle" : formatQuartersAndMl(remainingMl)} from inventory.
+                      Removes {getBottleBrokenDisplayName(remainingMl, bottleSizeMl)} from inventory.
                     </p>
                   </div>
                 )}
@@ -540,188 +577,121 @@ export default function StockPage() {
               (mode === "adjust" && !productId) ||
               (mode === "adjust" && adjustType === "SEND_BACK_TO_SELLER" && bottlesToReturn < 1)
             }
-            className="mt-4 w-full rounded-lg py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+            className="mt-3 w-full rounded-lg py-2 text-sm font-medium transition-opacity disabled:opacity-50"
             style={{ background: "var(--accent)", color: "#0e0e11" }}
           >
             {saving ? "Saving…" : mode === "receive" ? "Record Delivery" : "Save Adjustment"}
           </button>
         </form>
 
-        <div>
-          <h2 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-            Current Stock Levels
-          </h2>
-          <div className="overflow-hidden rounded-xl" style={{ border: "1px solid var(--border)" }}>
-            {levels.length === 0 ? (
-              <div className="p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-                No bottles yet
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                    <th
-                      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Bottle
-                    </th>
-                    <th
-                      className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Stock
-                    </th>
-                    <th
-                      className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Threshold
-                    </th>
-                    <th
-                      className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      ml
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {levels.map((l, i) => {
-                    const low =
-                      l.thresholdBottles !== null && l.currentBottles < l.thresholdBottles;
-                    const fullInStock = Math.floor(l.currentMl / l.bottleSizeMl);
-                    return (
-                    <tr
-                      key={l.productId}
-                      style={{
-                        background: "var(--surface-elevated)",
-                        borderBottom:
-                          i < levels.length - 1 ? "1px solid var(--border-subtle)" : undefined,
-                      }}
-                    >
-                      <td className="px-4 py-3 font-medium">{l.name}</td>
-                      <td
-                        className="px-4 py-3 text-right text-xs"
-                        style={{ color: low ? "var(--red)" : "var(--text-primary)" }}
-                      >
-                        {fullInStock} {fullInStock === 1 ? "bottle" : "bottles"} in stock
-                        <span className="mt-0.5 block text-[11px]" style={{ color: "var(--text-muted)" }}>
-                          {formatBottleStock(l.currentMl, l.bottleSizeMl)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--text-muted)" }}>
-                        {l.thresholdBottles !== null
-                          ? `${l.thresholdBottles} minimum required`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--text-muted)" }}>
-                        {l.currentMl}
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        <div className={`flex flex-col overflow-hidden rounded-xl ${LEVELS_PANEL_HEIGHT}`} style={{ border: "1px solid var(--border)" }}>
+          <div
+            className="flex shrink-0 items-center justify-between gap-3 px-4 py-3"
+            style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)" }}
+          >
+            <h2 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+              Current Stock Levels
+            </h2>
+            {levels.length > 0 && (
+              <input
+                type="search"
+                value={levelsSearch}
+                onChange={(e) => setLevelsSearch(e.target.value)}
+                placeholder="Search bottles…"
+                className="w-full max-w-[220px] rounded-lg px-3 py-1.5 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
             )}
           </div>
+          {levels.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+              No bottles yet
+            </div>
+          ) : visibleLevels.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+              No bottles match your search
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10">
+                    <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
+                        {levelsHeaderButton("name", "Bottle")}
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
+                        <span className="flex justify-end">{levelsHeaderButton("stock", "Stock", "right")}</span>
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
+                        <span className="flex justify-end">{levelsHeaderButton("threshold", "Threshold", "right")}</span>
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
+                        <span className="flex justify-end">{levelsHeaderButton("ml", "ml", "right")}</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleLevels.map((l, i) => {
+                      const low =
+                        l.thresholdBottles !== null && l.currentBottles < l.thresholdBottles;
+                      const fullInStock = Math.floor(l.currentMl / l.bottleSizeMl);
+                      return (
+                      <tr
+                        key={l.productId}
+                        style={{
+                          background: "var(--surface-elevated)",
+                          borderBottom:
+                            i < visibleLevels.length - 1 ? "1px solid var(--border-subtle)" : undefined,
+                        }}
+                      >
+                        <td className="px-4 py-3 font-medium">
+                          {l.name} ({formatBottleSizeLabel(l.bottleSizeMl)})
+                        </td>
+                        <td
+                          className="px-4 py-3 text-right text-xs"
+                          style={{ color: low ? "var(--red)" : "var(--text-primary)" }}
+                        >
+                          {fullInStock} {fullInStock === 1 ? "bottle" : "bottles"} in stock
+                          <span className="mt-0.5 block text-[11px]" style={{ color: "var(--text-muted)" }}>
+                            {formatBottleStock(l.currentMl, l.bottleSizeMl)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--text-muted)" }}>
+                          {l.thresholdBottles !== null
+                            ? `${l.thresholdBottles} minimum required`
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--text-muted)" }}>
+                          {l.currentMl}
+                        </td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+          )}
         </div>
       </div>
 
       <div className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-            Stock Activity
-          </h2>
-          <div className="flex items-center gap-2">
-            {([
-              { value: "all", label: "All" },
-              { value: "receive", label: "Receive" },
-              { value: "adjust", label: "Adjust" },
-            ] as const).map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setActivityFilter(tab.value)}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium"
-                style={{
-                  background: activityFilter === tab.value ? "var(--accent-dim)" : "transparent",
-                  color: activityFilter === tab.value ? "var(--accent)" : "var(--text-secondary)",
-                  border: `1px solid ${activityFilter === tab.value ? "rgba(245,166,35,0.3)" : "var(--border)"}`,
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="overflow-hidden rounded-xl" style={{ border: "1px solid var(--border)" }}>
-          {visibleActivity.length === 0 ? (
-            <div className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>
-              No stock movements yet
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
-                    <button type="button" onClick={() => onSort("name")} style={{ color: "var(--text-muted)" }}>
-                      Name{sortIndicator("name")}
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
-                    <button type="button" onClick={() => onSort("type")} style={{ color: "var(--text-muted)" }}>
-                      Type{sortIndicator("type")}
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
-                    <button type="button" onClick={() => onSort("dateTime")} style={{ color: "var(--text-muted)" }}>
-                      Date/Time{sortIndicator("dateTime")}
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
-                    <button type="button" onClick={() => onSort("qty")} style={{ color: "var(--text-muted)" }}>
-                      Qty Movement{sortIndicator("qty")}
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleActivity.map((entry, i) => (
-                  <tr
-                    key={entry.id}
-                    style={{
-                      background: "var(--surface-elevated)",
-                      borderBottom:
-                        i < visibleActivity.length - 1 ? "1px solid var(--border-subtle)" : undefined,
-                    }}
-                  >
-                    <td className="px-4 py-3 font-medium">{entry.product.name}</td>
-                    <td className="px-4 py-3">
-                      <p>{activityTypeLabel(entry.type)}</p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {entry.reason ?? "—"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                      {formatActivityDate(entry.createdAt)} {formatActivityTime(entry.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <p
-                        className="font-medium tabular-nums"
-                        style={{ color: entry.quantityDeltaMl >= 0 ? "var(--green)" : "var(--red)" }}
-                      >
-                        {entry.quantityDeltaMl >= 0 ? "+" : ""}
-                        {entry.quantityDeltaMl}ml
-                      </p>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <StockActivityTable activity={activity} variant="full" />
       </div>
+
+      <AddBottleModal
+        open={showAddBottleModal}
+        onClose={() => setShowAddBottleModal(false)}
+        existingProducts={products}
+        onCreated={async (product) => {
+          await load();
+          setProductId(product.id);
+          setLastResult(`Added ${product.name} — select quantity and record delivery.`);
+        }}
+      />
     </div>
   );
 }

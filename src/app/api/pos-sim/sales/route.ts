@@ -8,22 +8,37 @@ export async function GET(request: NextRequest) {
   if (!isSession(session)) return session;
 
   try {
-    const sales = await prisma.posSale.findMany({
-      where: { tenantId: session.tenantId },
-      orderBy: { soldAt: "desc" },
-      take: 20,
-      include: {
-        lines: {
-          include: {
-            product: {
-              select: { name: true },
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+    const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit") ?? "10") || 10));
+    const skip = (page - 1) * limit;
+
+    const where = { tenantId: session.tenantId };
+
+    const [sales, total] = await Promise.all([
+      prisma.posSale.findMany({
+        where,
+        orderBy: { soldAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          lines: {
+            include: {
+              product: {
+                select: { name: true, bottleSizeMl: true },
+              },
             },
           },
         },
-      },
-    });
+      }),
+      prisma.posSale.count({ where }),
+    ]);
 
     return apiOk({
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
       sales: sales.map((sale) => ({
         id: sale.id,
         saleId: sale.externalSaleId,
@@ -33,6 +48,7 @@ export async function GET(request: NextRequest) {
           productName: line.product.name,
           quantity: line.quantity,
           pourMl: Number(line.pourMl),
+          bottleSizeMl: Number(line.product.bottleSizeMl),
         })),
       })),
     });

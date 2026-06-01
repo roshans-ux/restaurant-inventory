@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { AlertType, StockMovementType } from "@prisma/client";
 import { formatBottleStock } from "@/lib/format-bottles";
 import { prisma } from "@/lib/prisma";
+import { maybeCreatePendingStockOrder } from "@/lib/stock-orders";
 
 export const DEFAULT_BOTTLE_SIZE_ML = 750;
 export const STANDARD_POUR_ML = 30;
@@ -18,12 +19,20 @@ export function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/** Prisma/pg may return null aggregate or null _sum when a product has no movements. */
+export function sumStockMovementMl(
+  agg: { _sum?: { quantityDeltaMl?: number | null } | null } | null | undefined,
+): number {
+  const value = agg?._sum?.quantityDeltaMl;
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 export async function getCurrentStockMl(productId: string): Promise<number> {
   const agg = await prisma.stockMovement.aggregate({
     where: { productId },
     _sum: { quantityDeltaMl: true },
   });
-  return agg._sum.quantityDeltaMl ?? 0;
+  return sumStockMovementMl(agg);
 }
 
 export function isBelowThreshold(currentMl: number, thresholdBottles: number, bottleSizeMl: number): boolean {
@@ -87,6 +96,8 @@ export async function syncLowStockAlerts(productId: string): Promise<void> {
       message: `${config.product.name} is below threshold at ${stockLabel}`,
     },
   });
+
+  await maybeCreatePendingStockOrder(productId, config.product.tenantId);
 }
 
 /** @deprecated Use syncLowStockAlerts */

@@ -34,6 +34,19 @@ enum QuantityUnit {
 
 enum AlertType {
   LOW_STOCK
+  SLIPPAGE
+}
+
+enum BottleRotationStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum StockOrderStatus {
+  PENDING
+  PLACED
+  MODIFIED
+  CANCELLED
 }
 
 model Tenant {
@@ -43,14 +56,23 @@ model Tenant {
   location              String?
   heardAboutUs          String?
   onboardingCompletedAt DateTime?
-  posWebhookSecret      String?
-  apiKey                String    @unique @default(uuid())
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  posWebhookSecret           String?
+  apiKey                     String    @unique @default(uuid())
+  slippageTolerancePercent   Int       @default(10)
+  shiftSchedule              Json?
+  shiftReportScheduledAt     DateTime?
+  shiftReportReadyAt         DateTime?
+  shiftReportWindowStartAt   DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
   users            User[]
   products         Product[]
   posSales         PosSale[]
-  posMappings      PosMenuMapping[]
+  posMappings         PosMenuMapping[]
+  cocktailMappings    CocktailMapping[]
+  vendors          Vendor[]
+  bottleRotations  BottleRotation[]
+  stockOrders      StockOrder[]
 }
 
 model User {
@@ -83,9 +105,24 @@ model AuthToken {
   @@index([userId, type])
 }
 
+model Vendor {
+  id              String       @id @default(uuid())
+  tenantId        String
+  name            String
+  whatsappNumber  String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products        Product[]
+  stockOrders     StockOrder[]
+
+  @@index([tenantId])
+}
+
 model Product {
   id               String           @id @default(uuid())
   tenantId         String
+  vendorId         String?
   name             String
   sku              String?
   bottleSizeMl     Decimal          @default(750)
@@ -94,15 +131,19 @@ model Product {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendor           Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   mappings         PosMenuMapping[]
   reorderConfig    ReorderConfig?
   stockMovements   StockMovement[]
   alerts           Alert[]
   saleLines        PosSaleLine[]
+  bottleRotations  BottleRotation[]
+  stockOrders      StockOrder[]
 
-  @@unique([tenantId, name])
+  @@unique([tenantId, name, bottleSizeMl])
   @@unique([tenantId, sku])
   @@index([tenantId])
+  @@index([vendorId])
 }
 
 model ReorderConfig {
@@ -121,12 +162,27 @@ model PosMenuMapping {
   id        String   @id @default(uuid())
   tenantId  String
   productId String
-  posItemId String
+  posItemId String?
   pourMl    Decimal  @default(30)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, posItemId])
+  @@index([tenantId])
+  @@index([tenantId, productId, pourMl])
+}
+
+model CocktailMapping {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  posItemId   String
+  ingredients Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, posItemId])
   @@index([tenantId])
@@ -189,4 +245,42 @@ model Alert {
   product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, type, resolvedAt])
+}
+
+model BottleRotation {
+  id         String               @id @default(uuid())
+  tenantId   String
+  productId  String
+  barcodeId  String
+  status     BottleRotationStatus @default(ACTIVE)
+  openedAt   DateTime             @default(now())
+  closedAt   DateTime?
+  slippageMl Int?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product    Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, productId, status])
+  @@index([tenantId, status])
+}
+
+model StockOrder {
+  id              String           @id @default(uuid())
+  tenantId        String
+  productId       String
+  vendorId        String?
+  quantityBottles Int
+  status          StockOrderStatus @default(PENDING)
+  notes           String?
+  placedAt        DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendor          Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([tenantId, productId, status])
 }

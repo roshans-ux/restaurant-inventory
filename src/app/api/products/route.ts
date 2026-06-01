@@ -8,9 +8,12 @@ import { recordApiMetric } from "@/lib/observability";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import {
   ALLOWED_BOTTLE_SIZE_ML,
+  DUPLICATE_BOTTLE_NAME_SIZE_MESSAGE,
   normalizeBottleName,
   skuFromNameAndSize,
 } from "@/lib/product-naming";
+import { ensureDraftMappingsForProduct, recordDeletedMappingSlot, reconcileBeerProductMappings } from "@/lib/pos-draft-mappings";
+import { isBeerBottleSize } from "@/lib/product-naming";
 
 const productSchema = z.object({
   name: z.string().min(2),
@@ -23,6 +26,7 @@ const productSchema = z.object({
   openingBottles: z.number().min(0).default(0),
   thresholdBottles: z.number().int().min(0).default(1),
   reorderQuantity: z.number().int().positive().default(6),
+  vendorId: z.string().uuid().nullable().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -32,7 +36,7 @@ export async function GET(request: NextRequest) {
   try {
     const products = await prisma.product.findMany({
       where: { tenantId: session.tenantId },
-      include: { reorderConfig: true },
+      include: { reorderConfig: true, vendor: true },
       orderBy: { name: "asc" },
     });
     recordApiMetric("GET /api/products", 200, Date.now() - startedAt);
@@ -55,15 +59,17 @@ export async function POST(request: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       const normalizedName = normalizeBottleName(parsed.name);
-      const existingByName = await tx.product.findMany({
+      const existingProducts = await tx.product.findMany({
         where: { tenantId: session.tenantId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, bottleSizeMl: true },
       });
-      const duplicate = existingByName.find(
-        (p) => normalizeBottleName(p.name) === normalizedName,
+      const duplicate = existingProducts.find(
+        (p) =>
+          normalizeBottleName(p.name) === normalizedName &&
+          Number(p.bottleSizeMl) === parsed.bottleSizeMl,
       );
       if (duplicate) {
-        throw new Error("Bottle name already exists. Select existing bottle to update.");
+        throw new Error(DUPLICATE_BOTTLE_NAME_SIZE_MESSAGE);
       }
 
       const allSkus = new Set(
@@ -92,7 +98,10 @@ export async function POST(request: NextRequest) {
           name: parsed.name.trim().replace(/\s+/g, " "),
           sku: finalSku,
           bottleSizeMl: parsed.bottleSizeMl,
-          defaultPourMl: parsed.defaultPourMl,
+          defaultPourMl: isBeerBottleSize(parsed.bottleSizeMl)
+            ? parsed.bottleSizeMl
+            : parsed.defaultPourMl,
+          vendorId: parsed.vendorId ?? null,
         },
       });
 
@@ -124,6 +133,19 @@ export async function POST(request: NextRequest) {
 
       return product;
     });
+
+    await ensureDraftMappingsForProduct(
+      prisma,
+      session.tenantId,
+      result.id,
+      parsed.bottleSizeMl,
+    );
+
+    if (isBeerBottleSize(parsed.bottleSizeMl)) {
+      for (const pourMl of [30, 60] as const) {
+        await recordDeletedMappingSlot(prisma, session.tenantId, result.id, pourMl);
+      }
+    }
 
     recordApiMetric("POST /api/products", 201, Date.now() - startedAt);
     return Response.json({ ok: true, product: result }, { status: 201 });

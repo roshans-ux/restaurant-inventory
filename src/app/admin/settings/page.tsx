@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Copy, Check } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { Copy, Check, Plus, Trash2, Pencil } from "lucide-react";
+import { DAY_KEYS, formatDayLabel, type DayKey, type ShiftSchedule } from "@/lib/shift-schedule";
+import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 
 type TenantInfo = {
   name: string;
   slug: string;
   apiKey: string;
   posWebhookSecret: string | null;
+  slippageTolerancePercent: number;
+  shiftSchedule: ShiftSchedule;
+};
+
+type Vendor = {
+  id: string;
+  name: string;
+  whatsappNumber: string;
+  products?: { id: string; name: string; sku: string | null }[];
 };
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -51,20 +62,144 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 export default function SettingsPage() {
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
+  const [slippage, setSlippage] = useState("10");
+  const [schedule, setSchedule] = useState<ShiftSchedule>({});
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState("");
+  const [vendorName, setVendorName] = useState("");
+  const [vendorPhone, setVendorPhone] = useState("");
+  const [vendorError, setVendorError] = useState("");
+  const [addingVendor, setAddingVendor] = useState(false);
+  const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
+  const [editVendorName, setEditVendorName] = useState("");
+  const [editVendorPhone, setEditVendorPhone] = useState("");
+  const [savingVendor, setSavingVendor] = useState(false);
+
+  async function loadAll() {
+    const [meRes, vendorsRes] = await Promise.all([
+      fetch("/api/settings"),
+      fetch("/api/vendors"),
+    ]);
+    const meData = await readJsonResponse<{
+      ok?: boolean;
+      data?: TenantInfo;
+    }>(meRes);
+    const vendorsData = await readJsonResponse<{
+      ok?: boolean;
+      data?: { vendors?: Vendor[] };
+    }>(vendorsRes);
+    if (meData.ok && meData.data) {
+      const t = meData.data;
+      setTenant({
+        name: t.name,
+        slug: t.slug,
+        apiKey: t.apiKey,
+        posWebhookSecret: t.posWebhookSecret,
+        slippageTolerancePercent: t.slippageTolerancePercent ?? 10,
+        shiftSchedule: t.shiftSchedule ?? {},
+      });
+      setSlippage(String(t.slippageTolerancePercent ?? 10));
+      setSchedule(t.shiftSchedule ?? {});
+    }
+    if (vendorsData.ok) {
+      setVendors(vendorsData.data?.vendors ?? []);
+    }
+    setLoading(false);
+  }
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.ok && data.data?.tenant) {
-          setTenant(data.data.tenant);
-        }
-      })
-      .finally(() => setLoading(false));
+    loadAll();
   }, []);
+
+  async function saveSettings(e: FormEvent) {
+    e.preventDefault();
+    setSavingSettings(true);
+    setSettingsMsg("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slippageTolerancePercent: Math.round(Number(slippage)),
+          shiftSchedule: schedule,
+        }),
+      });
+      const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string; details?: unknown } }>(res);
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Save failed"));
+      setSettingsMsg("Settings saved");
+    } catch (err) {
+      setSettingsMsg(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSavingSettings(false);
+    }
+  }
+
+  async function addVendor(e: FormEvent) {
+    e.preventDefault();
+    setAddingVendor(true);
+    setVendorError("");
+    try {
+      const res = await fetch("/api/vendors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: vendorName, whatsappNumber: vendorPhone }),
+      });
+      const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string; details?: unknown } }>(res);
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to add vendor"));
+      setVendorName("");
+      setVendorPhone("");
+      await loadAll();
+    } catch (err) {
+      setVendorError(err instanceof Error ? err.message : "Failed to add vendor");
+    } finally {
+      setAddingVendor(false);
+    }
+  }
+
+  async function deleteVendor(id: string) {
+    const res = await fetch(`/api/vendors/${id}`, { method: "DELETE" });
+    if (res.ok) await loadAll();
+  }
+
+  function startEditVendor(v: Vendor) {
+    setEditingVendorId(v.id);
+    setEditVendorName(v.name);
+    setEditVendorPhone(v.whatsappNumber);
+    setVendorError("");
+  }
+
+  function cancelEditVendor() {
+    setEditingVendorId(null);
+    setEditVendorName("");
+    setEditVendorPhone("");
+    setVendorError("");
+  }
+
+  async function saveVendorEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!editingVendorId) return;
+    setSavingVendor(true);
+    setVendorError("");
+    try {
+      const res = await fetch(`/api/vendors/${editingVendorId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editVendorName, whatsappNumber: editVendorPhone }),
+      });
+      const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string; details?: unknown } }>(res);
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to update vendor"));
+      cancelEditVendor();
+      await loadAll();
+    } catch (err) {
+      setVendorError(err instanceof Error ? err.message : "Failed to update vendor");
+    } finally {
+      setSavingVendor(false);
+    }
+  }
 
   const webhookUrl = origin ? `${origin}/api/webhooks/pos/sale` : "/api/webhooks/pos/sale";
 
@@ -73,7 +208,7 @@ export default function SettingsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Venue credentials for POS integration
+          Venue credentials, slippage tolerance, shift schedule, and vendors
         </p>
       </div>
 
@@ -103,6 +238,227 @@ export default function SettingsPage() {
             )}
           </div>
 
+          <form
+            onSubmit={saveSettings}
+            className="rounded-xl p-5 space-y-4"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-sm font-medium">Slippage Tolerance</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Alert when bottle slippage exceeds this percentage on close.
+            </p>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                Tolerance (%)
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={slippage}
+                onChange={(e) => setSlippage(e.target.value)}
+                className="w-24 rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+            </label>
+
+            <p className="text-sm font-medium pt-2">Shift Schedule</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              End-of-shift time for each day (24h HH:MM). Leave empty for closed days.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {DAY_KEYS.map((key: DayKey) => (
+                <label key={key} className="flex items-center justify-between gap-2">
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {formatDayLabel(key)}
+                  </span>
+                  <input
+                    type="time"
+                    value={schedule[key] ?? ""}
+                    onChange={(e) =>
+                      setSchedule((prev) => ({
+                        ...prev,
+                        [key]: e.target.value || null,
+                      }))
+                    }
+                    className="rounded-lg px-2 py-1.5 text-sm outline-none"
+                    style={{
+                      background: "var(--surface-elevated)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-primary)",
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+
+            {settingsMsg && (
+              <p className="text-xs" style={{ color: settingsMsg.includes("failed") ? "var(--red)" : "var(--green)" }}>
+                {settingsMsg}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={savingSettings}
+              className="rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+              style={{ background: "var(--accent)", color: "#0e0e11" }}
+            >
+              {savingSettings ? "Saving…" : "Save Settings"}
+            </button>
+          </form>
+
+          <div
+            className="rounded-xl p-5 space-y-4"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-sm font-medium">Vendors</p>
+            {vendors.length === 0 ? (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                No vendors yet. Add one below to assign to bottles and stock orders.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {vendors.map((v) => (
+                  <li
+                    key={v.id}
+                    className="rounded-lg px-3 py-2"
+                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}
+                  >
+                    {editingVendorId === v.id ? (
+                      <form onSubmit={saveVendorEdit} className="grid gap-2 sm:grid-cols-2">
+                        <input
+                          value={editVendorName}
+                          onChange={(e) => setEditVendorName(e.target.value)}
+                          required
+                          className="rounded-lg px-3 py-2 text-sm outline-none"
+                          style={{
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text-primary)",
+                          }}
+                        />
+                        <input
+                          value={editVendorPhone}
+                          onChange={(e) => setEditVendorPhone(e.target.value)}
+                          required
+                          className="rounded-lg px-3 py-2 text-sm outline-none"
+                          style={{
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text-primary)",
+                          }}
+                        />
+                        <div className="sm:col-span-2 flex gap-2">
+                          <button
+                            type="submit"
+                            disabled={savingVendor}
+                            className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                            style={{ background: "var(--accent)", color: "#0e0e11" }}
+                          >
+                            {savingVendor ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditVendor}
+                            className="rounded-lg px-3 py-1.5 text-xs"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{v.name}</p>
+                          <p className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                            {v.whatsappNumber}
+                          </p>
+                          {v.products && v.products.length > 0 ? (
+                            <p className="mt-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+                              SKUs:{" "}
+                              {v.products
+                                .map((p) => (p.sku ? `${p.name} (${p.sku})` : p.name))
+                                .join(", ")}
+                            </p>
+                          ) : (
+                            <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                              No SKUs assigned
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEditVendor(v)}
+                            className="rounded p-1.5"
+                            style={{ color: "var(--accent)" }}
+                            title="Edit vendor"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteVendor(v.id)}
+                            className="rounded p-1.5"
+                            style={{ color: "var(--red)" }}
+                            title="Delete vendor"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={addVendor} className="grid gap-3 sm:grid-cols-2 pt-2">
+              <input
+                placeholder="Vendor name"
+                value={vendorName}
+                onChange={(e) => setVendorName(e.target.value)}
+                required
+                className="rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <input
+                placeholder="WhatsApp number"
+                value={vendorPhone}
+                onChange={(e) => setVendorPhone(e.target.value)}
+                required
+                className="rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              {vendorError && (
+                <p className="sm:col-span-2 text-xs" style={{ color: "var(--red)" }}>
+                  {vendorError}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={addingVendor}
+                className="sm:col-span-2 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium disabled:opacity-50"
+                style={{ background: "var(--accent)", color: "#0e0e11" }}
+              >
+                <Plus size={14} />
+                {addingVendor ? "Adding…" : "Add Vendor"}
+              </button>
+            </form>
+          </div>
+
           <div
             className="rounded-xl p-5 space-y-3"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
@@ -116,21 +472,6 @@ export default function SettingsPage() {
                 <li>x-pos-signature — HMAC-SHA256 hex of the raw JSON body</li>
               </ul>
             </div>
-          </div>
-
-          <div
-            className="rounded-xl p-5"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            <p className="text-sm font-medium mb-2">Platform environment</p>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Set <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>SESSION_SECRET</code>,{" "}
-              <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>DATABASE_URL</code>, and
-              <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>GOOGLE_SHEETS_WEBHOOK_URL</code> in
-              your host&apos;s environment (see{" "}
-              <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>.env.example</code>).
-              New venues sign up at <code className="rounded px-1" style={{ background: "var(--surface-elevated)" }}>/signup</code>.
-            </p>
           </div>
         </div>
       )}

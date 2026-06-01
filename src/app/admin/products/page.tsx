@@ -2,12 +2,19 @@
 
 import { useEffect, useState, FormEvent, useCallback, useRef, useMemo } from "react";
 import { Plus, Wine, ChevronDown, Trash2 } from "lucide-react";
+import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
+import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import {
   BOTTLE_SIZE_OPTIONS,
+  DUPLICATE_BOTTLE_NAME_SIZE_MESSAGE,
   formatBottleSizeLabel,
+  isSameBottleNameAndSize,
   normalizeBottleSizeMl,
   skuFromNameAndSize,
 } from "@/lib/product-naming";
+
+type ProductSortField = "name" | "sku" | "bottleSize" | "threshold";
+type SortDirection = "asc" | "desc";
 
 type Product = {
   id: string;
@@ -15,14 +22,21 @@ type Product = {
   sku: string | null;
   bottleSizeMl: string;
   defaultPourMl: string;
+  vendorId: string | null;
   reorderConfig?: {
     thresholdBottles: string;
     reorderQuantity: number;
   } | null;
 };
 
+type Vendor = {
+  id: string;
+  name: string;
+};
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -32,20 +46,75 @@ export default function ProductsPage() {
   const [skuManualOverride, setSkuManualOverride] = useState(false);
   const [bottleSizeInput, setBottleSizeInput] = useState("750");
   const [thresholdInput, setThresholdInput] = useState("1");
+  const [reorderQtyInput, setReorderQtyInput] = useState("6");
+  const [vendorIdInput, setVendorIdInput] = useState("");
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sortField, setSortField] = useState<ProductSortField>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const deleteConfirmRef = useRef<HTMLButtonElement | null>(null);
+
+  const visibleProducts = useMemo(() => {
+    return [...products].sort((a, b) => {
+      let compare = 0;
+      if (sortField === "name") {
+        compare = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      } else if (sortField === "sku") {
+        compare = (a.sku ?? "").localeCompare(b.sku ?? "", undefined, { sensitivity: "base" });
+      } else if (sortField === "bottleSize") {
+        compare = Number(a.bottleSizeMl) - Number(b.bottleSizeMl);
+      } else {
+        const aThreshold = a.reorderConfig ? Number(a.reorderConfig.thresholdBottles) : -1;
+        const bThreshold = b.reorderConfig ? Number(b.reorderConfig.thresholdBottles) : -1;
+        compare = aThreshold - bThreshold;
+      }
+      return sortDirection === "asc" ? compare : -compare;
+    });
+  }, [products, sortDirection, sortField]);
+
+  function onSort(field: ProductSortField) {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortField(field);
+    setSortDirection("asc");
+  }
+
+  function sortHeader(field: ProductSortField, label: string, align: "left" | "right" = "left") {
+    return (
+      <button
+        type="button"
+        onClick={() => onSort(field)}
+        className={`inline-flex items-center gap-1 ${align === "right" ? "ml-auto" : ""}`}
+        style={{ color: "var(--text-muted)" }}
+      >
+        {label}
+        <SortHeaderIcon active={sortField === field} direction={sortDirection} />
+      </button>
+    );
+  }
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/products");
-      if (!res.ok) {
-        throw new Error(`Failed to load products (${res.status})`);
+      const [prodRes, vendorRes] = await Promise.all([
+        fetch("/api/products"),
+        fetch("/api/vendors"),
+      ]);
+      if (!prodRes.ok) {
+        throw new Error(`Failed to load products (${prodRes.status})`);
       }
-      const data = await res.json();
+      const data = await readJsonResponse<{ products?: Product[] }>(prodRes);
       setProducts(data.products ?? []);
+      const vendorData = await readJsonResponse<{
+        ok?: boolean;
+        data?: { vendors?: Vendor[] };
+      }>(vendorRes);
+      if (vendorData.ok) {
+        setVendors(vendorData.data?.vendors ?? []);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load products");
     }
@@ -82,10 +151,24 @@ export default function ProductsPage() {
     setSkuInput(suggestedSku);
   }, [showForm, skuManualOverride, suggestedSku]);
 
+  const selectedSizeMl = Number(bottleSizeInput);
+
+  const exactDuplicate = useMemo(() => {
+    if (!nameInput.trim() || !Number.isFinite(selectedSizeMl) || editingProductId) return null;
+    return products.find((p) =>
+      isSameBottleNameAndSize(nameInput, selectedSizeMl, p.name, Number(p.bottleSizeMl)),
+    );
+  }, [editingProductId, nameInput, products, selectedSizeMl]);
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
     setError("");
+    if (exactDuplicate) {
+      setError(DUPLICATE_BOTTLE_NAME_SIZE_MESSAGE);
+      setSaving(false);
+      return;
+    }
     if (skuConflict) {
       setError(`SKU "${skuConflict}" is already in use. Enter a unique SKU to continue.`);
       setSaving(false);
@@ -103,21 +186,20 @@ export default function ProductsPage() {
           bottleSizeMl: Number(bottleSizeInput),
           openingBottles: 0,
           thresholdBottles: Math.max(0, Math.round(Number(thresholdInput) || 0)),
+          reorderQuantity: Math.max(1, Math.round(Number(reorderQtyInput) || 6)),
+          vendorId: vendorIdInput || null,
         }),
       });
 
-      let data: { error?: string | { message?: string } };
-      try {
-        data = await res.json();
-      } catch {
-        data = {};
-      }
+      const data = await readJsonResponse<{
+        error?: string | { message?: string };
+      }>(res);
 
       if (!res.ok) {
         const msg =
           typeof data.error === "string"
             ? data.error
-            : data.error?.message ?? `Failed to save bottle (${res.status})`;
+            : getApiErrorMessage({ error: typeof data.error === "object" ? data.error : undefined }, `Failed to save bottle (${res.status})`);
         throw new Error(msg);
       }
 
@@ -127,6 +209,8 @@ export default function ProductsPage() {
       setSkuManualOverride(false);
       setBottleSizeInput("750");
       setThresholdInput("1");
+      setReorderQtyInput("6");
+      setVendorIdInput("");
       setSuggestions([]);
       setShowForm(false);
       await load();
@@ -143,7 +227,7 @@ export default function ProductsPage() {
       return;
     }
     const res = await fetch(`/api/products/search?q=${encodeURIComponent(q)}`);
-    const data = await res.json();
+    const data = await readJsonResponse<{ products?: Product[] }>(res);
     setSuggestions(data.products ?? []);
   }, []);
 
@@ -208,6 +292,10 @@ export default function ProductsPage() {
         ? String(Math.round(Number(product.reorderConfig.thresholdBottles)))
         : "1",
     );
+    setReorderQtyInput(
+      product.reorderConfig ? String(product.reorderConfig.reorderQuantity) : "6",
+    );
+    setVendorIdInput(product.vendorId ?? "");
     setSuggestions([]);
     setShowSuggestions(false);
     setShowForm(true);
@@ -235,6 +323,8 @@ export default function ProductsPage() {
             setSkuManualOverride(false);
             setBottleSizeInput("750");
             setThresholdInput("1");
+            setReorderQtyInput("6");
+            setVendorIdInput("");
             setError("");
             setShowForm(true);
           }}
@@ -294,14 +384,14 @@ export default function ProductsPage() {
                         className="w-full px-3 py-2 text-left text-sm hover:opacity-80"
                         style={{ color: "var(--text-primary)" }}
                       >
-                        {s.name}
+                        {s.name} ({formatBottleSizeLabel(Number(s.bottleSizeMl))})
                       </button>
                     ))}
                   </div>
                 )}
               </div>
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Existing names are suggested. Select one to update instead of creating duplicate.
+                Same name in a different size is allowed. Select an existing row to edit it.
               </span>
             </label>
 
@@ -413,6 +503,64 @@ export default function ProductsPage() {
               />
             </label>
 
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                Reorder Quantity (bottles)
+              </span>
+              <input
+                name="reorderQuantity"
+                type="number"
+                min={1}
+                step={1}
+                value={reorderQtyInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "") {
+                    setReorderQtyInput("");
+                    return;
+                  }
+                  const n = Math.max(1, Math.round(Number(raw)));
+                  if (Number.isFinite(n)) setReorderQtyInput(String(n));
+                }}
+                className="rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                Vendor
+              </span>
+              <div className="relative">
+                <select
+                  value={vendorIdInput}
+                  onChange={(e) => setVendorIdInput(e.target.value)}
+                  className="w-full appearance-none rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <option value="">No vendor</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={13}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "var(--text-muted)" }}
+                />
+              </div>
+            </label>
+
           </div>
 
           {error && (
@@ -484,7 +632,8 @@ export default function ProductsPage() {
                   key={p.id}
                   style={{
                     background: "var(--surface-elevated)",
-                    borderBottom: i < products.length - 1 ? "1px solid var(--border-subtle)" : undefined,
+                    borderBottom:
+                      i < visibleProducts.length - 1 ? "1px solid var(--border-subtle)" : undefined,
                   }}
                 >
                   <td className="px-4 py-3 font-medium">{p.name}</td>

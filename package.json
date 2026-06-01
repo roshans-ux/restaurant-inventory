@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:clean": "rm -rf .next && next dev",
+    "dev:clean": "pkill -f 'next dev' 2>/dev/null || true; rm -rf .next 2>/dev/null || true; next dev",
     "db:start": "prisma dev -d -n restaurant-inventory",
     "db:setup": "prisma db push && npm run seed",
     "dev:local": "npm run db:start && npm run db:setup && npm run dev",

@@ -1,9 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
 
 /** Bump when schema/delegates change so dev hot-reload does not keep a stale client. */
-const PRISMA_CLIENT_GENERATION = "2026-05-tenant-auth-v2";
+const PRISMA_CLIENT_GENERATION = "2026-05-31-vendor-stock-order-handover-v1";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -22,8 +21,10 @@ function createPrismaClient(): PrismaClient {
     );
   }
 
-  const pool = new Pool({ connectionString: databaseUrl });
-  const adapter = new PrismaPg(pool);
+  const adapter = new PrismaPg({
+    connectionString: databaseUrl,
+    max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+  });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
@@ -34,7 +35,13 @@ function isValidCachedClient(client: PrismaClient | undefined): client is Prisma
   return (
     client !== undefined &&
     globalForPrisma.prismaGeneration === PRISMA_CLIENT_GENERATION &&
-    typeof client.user?.findFirst === "function"
+    typeof client.user?.findFirst === "function" &&
+    typeof client.product?.findMany === "function" &&
+    typeof client.posMenuMapping?.findFirst === "function" &&
+    typeof client.cocktailMapping?.findFirst === "function" &&
+    typeof client.vendor?.findMany === "function" &&
+    typeof client.stockOrder?.findMany === "function" &&
+    typeof client.bottleRotation?.findMany === "function"
   );
 }
 

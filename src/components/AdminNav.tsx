@@ -7,18 +7,20 @@ import {
   LayoutDashboard,
   Wine,
   PackagePlus,
-  Bell,
   Zap,
   GitBranch,
   Settings,
   LogOut,
+  ArrowRightLeft,
+  ClipboardList,
 } from "lucide-react";
 
 const links = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/admin/products", label: "Bottles", icon: Wine },
   { href: "/admin/stock", label: "Stock Entry", icon: PackagePlus },
-  { href: "/admin/alerts", label: "Alerts", icon: Bell },
+  { href: "/admin/handover", label: "Bottle Handover", icon: ArrowRightLeft },
+  { href: "/admin/stock-orders", label: "Stock Orders", icon: ClipboardList },
+  { href: "/admin/products", label: "Bottles", icon: Wine },
   { href: "/admin/mappings", label: "POS Mappings", icon: GitBranch },
   { href: "/admin/pos-sim", label: "POS Simulator", icon: Zap },
   { href: "/admin/settings", label: "Settings", icon: Settings },

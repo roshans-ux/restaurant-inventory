@@ -1,15 +1,18 @@
 import { NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { QuantityUnit, StockMovementType } from "@prisma/client";
-import {
-  evaluateLowStock,
-  isWithinReplayWindow,
-  stockGuardReserveMl,
-  verifyWebhookSignature,
-} from "@/lib/inventory";
+import { QuantityUnit } from "@prisma/client";
+import { evaluateLowStock, isWithinReplayWindow, verifyWebhookSignature } from "@/lib/inventory";
 import { apiError, apiOk } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
+import {
+  collectSaleRejections,
+  isPgAdapterBindError,
+  recordCocktailSaleLine,
+  recordPourSaleLine,
+  rollbackRecordedSale,
+  withPgRetry,
+} from "@/lib/pos-webhook-sale";
 import { prisma } from "@/lib/prisma";
 
 const saleSchema = z.object({
@@ -109,8 +112,22 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const posSale = await tx.posSale.create({
+    const preflightRejections = await withPgRetry(() =>
+      collectSaleRejections(prisma, tenant.id, payload.lines),
+    );
+    if (preflightRejections.length > 0) {
+      const response = apiError(
+        "SALE_REJECTED_OUT_OF_STOCK",
+        "Sale rejected because one or more line items are unavailable",
+        409,
+        preflightRejections,
+      );
+      recordApiMetric("POST /api/webhooks/pos/sale", 409, Date.now() - startedAt);
+      return response;
+    }
+
+    const result = await withPgRetry(async () => {
+      const posSale = await prisma.posSale.create({
         data: {
           tenantId: tenant.id,
           externalSaleId: payload.external_sale_id,
@@ -119,99 +136,44 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const rejectedLines: Array<{
-        externalLineId: string;
-        posItemId: string;
-        reason: string;
-        productName?: string;
-        requestedQuantity?: number;
-        maxAllowedQuantity?: number;
-        pourMl?: number;
-        availableMl?: number;
-        requiredMl?: number;
-      }> = [];
+      const movementReferenceIds: string[] = [];
 
-      for (const line of payload.lines) {
-        const mapping = await tx.posMenuMapping.findUnique({
-          where: {
-            tenantId_posItemId: {
-              tenantId: tenant.id,
-              posItemId: line.pos_item_id,
-            },
-          },
-          include: { product: true },
-        });
+      try {
+        for (const line of payload.lines) {
+          const cocktailRecorded = await recordCocktailSaleLine(
+            prisma,
+            tenant.id,
+            posSale.id,
+            payload.external_sale_id,
+            line,
+          );
+          if (cocktailRecorded && "reason" in cocktailRecorded) {
+            throw new Error(
+              JSON.stringify({ kind: "SALE_REJECTED", rejectedLines: [cocktailRecorded] }),
+            );
+          }
+          if (cocktailRecorded && "movementReferenceIds" in cocktailRecorded) {
+            movementReferenceIds.push(...cocktailRecorded.movementReferenceIds);
+            continue;
+          }
 
-        if (!mapping) {
-          rejectedLines.push({
-            externalLineId: line.external_line_id,
-            posItemId: line.pos_item_id,
-            reason: "UNMAPPED_POS_ITEM",
-          });
-          continue;
+          const pourRecorded = await recordPourSaleLine(
+            prisma,
+            tenant.id,
+            posSale.id,
+            payload.external_sale_id,
+            line,
+          );
+          if ("reason" in pourRecorded) {
+            throw new Error(
+              JSON.stringify({ kind: "SALE_REJECTED", rejectedLines: [pourRecorded] }),
+            );
+          }
+          movementReferenceIds.push(...pourRecorded.movementReferenceIds);
         }
-
-        const pourMl = Number(mapping.pourMl);
-        const decrementMl = Math.round(pourMl * line.quantity);
-        const currentAgg = await tx.stockMovement.aggregate({
-          where: { productId: mapping.productId },
-          _sum: { quantityDeltaMl: true },
-        });
-        const currentMl = currentAgg._sum.quantityDeltaMl ?? 0;
-        const reserveMl = stockGuardReserveMl(Number(mapping.product.bottleSizeMl));
-        const availableForSaleMl = Math.max(0, currentMl - reserveMl);
-
-        if (decrementMl > availableForSaleMl) {
-          const maxAllowedQuantity = Math.max(0, Math.floor(availableForSaleMl / pourMl));
-          rejectedLines.push({
-            externalLineId: line.external_line_id,
-            posItemId: line.pos_item_id,
-            reason: "OUT_OF_STOCK_MARGIN_GUARD",
-            productName: mapping.product.name,
-            requestedQuantity: line.quantity,
-            maxAllowedQuantity,
-            pourMl,
-            availableMl: availableForSaleMl,
-            requiredMl: decrementMl,
-          });
-          continue;
-        }
-
-        await tx.posSaleLine.create({
-          data: {
-            posSaleId: posSale.id,
-            productId: mapping.productId,
-            externalLineId: line.external_line_id,
-            saleEventKey: `${payload.external_sale_id}:${line.external_line_id}`,
-            posItemId: line.pos_item_id,
-            quantity: line.quantity,
-            pourMl,
-            decrementMl,
-          },
-        });
-
-        await tx.stockMovement.create({
-          data: {
-            productId: mapping.productId,
-            type: StockMovementType.SALE,
-            quantityDeltaMl: -Math.abs(decrementMl),
-            quantityInput: decrementMl,
-            quantityUnit: QuantityUnit.ML,
-            referenceId: line.external_line_id,
-            reason: "POS sale",
-            metadata: {
-              source: "POS_WEBHOOK",
-              externalSaleId: payload.external_sale_id,
-              externalLineId: line.external_line_id,
-              posItemId: line.pos_item_id,
-              quantity: line.quantity,
-            },
-          },
-        });
-      }
-
-      if (rejectedLines.length > 0) {
-        throw new Error(JSON.stringify({ kind: "SALE_REJECTED", rejectedLines }));
+      } catch (recordError) {
+        await rollbackRecordedSale(prisma, posSale.id, movementReferenceIds);
+        throw recordError;
       }
 
       return posSale;
@@ -223,7 +185,15 @@ export async function POST(request: NextRequest) {
       distinct: ["productId"],
     });
 
-    await Promise.all(lines.map((line) => evaluateLowStock(line.productId)));
+    await Promise.all(
+      lines.map(async (line) => {
+        try {
+          await evaluateLowStock(line.productId);
+        } catch (alertError) {
+          console.error("Low-stock alert sync failed after sale:", alertError);
+        }
+      }),
+    );
     const response = apiOk({ saleId: result.id, accepted: true });
     recordApiMetric("POST /api/webhooks/pos/sale", 200, Date.now() - startedAt);
     return response;
@@ -245,12 +215,36 @@ export async function POST(request: NextRequest) {
         // no-op
       }
     }
+
+    if (error instanceof z.ZodError) {
+      const response = apiError("INVALID_SALE_PAYLOAD", "Invalid sale payload", 400, error.flatten());
+      recordApiMetric("POST /api/webhooks/pos/sale", 400, Date.now() - startedAt);
+      return response;
+    }
+
+    const prismaCode =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code: string }).code)
+        : "";
+    if (prismaCode === "P2002") {
+      const response = apiError(
+        "DUPLICATE_SALE_LINES",
+        "One or more sale lines were already processed",
+        409,
+      );
+      recordApiMetric("POST /api/webhooks/pos/sale", 409, Date.now() - startedAt);
+      return response;
+    }
+
+    console.error("POS sale webhook failed:", error);
     const response = apiError(
-      "INVALID_SALE_PAYLOAD",
-      error instanceof Error ? error.message : "Invalid payload",
-      400,
+      "POS_SALE_PROCESSING_FAILED",
+      isPgAdapterBindError(error)
+        ? "Temporary database error while processing the sale — please fire the webhook again."
+        : "Sale could not be processed. Check server logs for details.",
+      500,
     );
-    recordApiMetric("POST /api/webhooks/pos/sale", 400, Date.now() - startedAt);
+    recordApiMetric("POST /api/webhooks/pos/sale", 500, Date.now() - startedAt);
     return response;
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { sumStockMovementMl } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
 import { apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
         where: { productId: product.id },
         _sum: { quantityDeltaMl: true },
       });
-      const currentMl = sum._sum.quantityDeltaMl ?? 0;
+      const currentMl = sumStockMovementMl(sum);
       const thresholdMl = product.reorderConfig
         ? Math.round(Number(product.reorderConfig.thresholdBottles) * Number(product.bottleSizeMl))
         : null;

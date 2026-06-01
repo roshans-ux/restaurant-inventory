@@ -12,31 +12,42 @@ export async function GET(request: NextRequest) {
     return apiError("UNAUTHORIZED", "Sign in required", 401);
   }
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: session.tenantId },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      location: true,
-      heardAboutUs: true,
-      onboardingCompletedAt: true,
-      apiKey: true,
-      posWebhookSecret: true,
-    },
-  });
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: session.tenantId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        location: true,
+        heardAboutUs: true,
+        onboardingCompletedAt: true,
+        apiKey: true,
+        posWebhookSecret: true,
+        slippageTolerancePercent: true,
+        shiftSchedule: true,
+        shiftReportScheduledAt: true,
+        shiftReportReadyAt: true,
+        shiftReportWindowStartAt: true,
+      },
+    });
 
-  if (!tenant) {
-    return apiError("TENANT_NOT_FOUND", "Venue not found", 404);
+    if (!tenant) {
+      return apiError("TENANT_NOT_FOUND", "Venue not found", 404);
+    }
+
+    return apiOk({
+      user: {
+        id: session.sub,
+        email: session.email,
+        role: session.role,
+      },
+      tenant,
+      needsOnboarding: tenant.onboardingCompletedAt == null,
+    });
+  } catch (error) {
+    return apiError("ME_FETCH_FAILED", "Failed to fetch session", 500, {
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
   }
-
-  return apiOk({
-    user: {
-      id: session.sub,
-      email: session.email,
-      role: session.role,
-    },
-    tenant,
-    needsOnboarding: tenant.onboardingCompletedAt == null,
-  });
 }
