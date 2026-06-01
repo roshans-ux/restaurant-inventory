@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
 import {
@@ -54,6 +55,40 @@ function formatSaleLineItem(
 
 function SaleItemsCell({ lines }: { lines: RecentSaleRow["lines"] }) {
   const summary = lines.map(formatSaleLineItem).join(" · ");
+  const triggerRef = useRef<HTMLParagraphElement>(null);
+  const [tooltip, setTooltip] = useState<{
+    left: number;
+    top: number;
+    placement: "above" | "below";
+  } | null>(null);
+
+  const showTooltip = useCallback(() => {
+    if (lines.length === 0) return;
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    const estimatedHeight = 48 + lines.length * 20;
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placement =
+      spaceAbove >= estimatedHeight || spaceAbove >= spaceBelow ? "above" : "below";
+
+    setTooltip({
+      left: rect.left,
+      top: placement === "above" ? rect.top - gap : rect.bottom + gap,
+      placement,
+    });
+  }, [lines]);
+
+  const hideTooltip = useCallback(() => setTooltip(null), []);
+
+  useEffect(() => {
+    if (!tooltip) return;
+    const hide = () => setTooltip(null);
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, [tooltip]);
 
   if (lines.length === 0) {
     return (
@@ -63,18 +98,17 @@ function SaleItemsCell({ lines }: { lines: RecentSaleRow["lines"] }) {
     );
   }
 
-  return (
-    <div className="group relative min-w-0 w-full">
-      <p
-        className="cursor-default truncate text-sm"
-        style={{ color: "var(--text-secondary)" }}
-      >
-        {summary}
-      </p>
+  const tooltipNode =
+    tooltip &&
+    typeof document !== "undefined" &&
+    createPortal(
       <div
         role="tooltip"
-        className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 hidden w-max max-w-sm rounded-lg px-3 py-2.5 text-xs shadow-lg group-hover:block"
+        className="pointer-events-none fixed z-[9999] w-max max-w-sm rounded-lg px-3 py-2.5 text-xs shadow-lg"
         style={{
+          left: tooltip.left,
+          top: tooltip.top,
+          transform: tooltip.placement === "above" ? "translateY(-100%)" : undefined,
           background: "var(--surface)",
           border: "1px solid var(--border)",
           color: "var(--text-secondary)",
@@ -89,8 +123,23 @@ function SaleItemsCell({ lines }: { lines: RecentSaleRow["lines"] }) {
             <li key={`${line.productName}-${line.pourMl}-${idx}`}>{formatSaleLineItem(line)}</li>
           ))}
         </ul>
-      </div>
-    </div>
+      </div>,
+      document.body,
+    );
+
+  return (
+    <>
+      <p
+        ref={triggerRef}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        className="cursor-default truncate text-sm"
+        style={{ color: "var(--text-secondary)" }}
+      >
+        {summary}
+      </p>
+      {tooltipNode}
+    </>
   );
 }
 
