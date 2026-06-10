@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Alegreya_Sans, EB_Garamond, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const fontDisplay = EB_Garamond({
@@ -40,6 +41,7 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
         {children}
+        <Analytics />
       </body>
     </html>
   );
