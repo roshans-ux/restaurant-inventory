@@ -1,17 +1,15 @@
 import { NextRequest } from "next/server";
+import { unstable_cache } from "next/cache";
 import { sumStockMovementMl } from "@/lib/inventory";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 
-export async function GET(request: NextRequest) {
-  const startedAt = Date.now();
-  const session = await requireApiSession(request);
-  if (!isSession(session)) return session;
-  try {
+const getCachedInventoryLevels = unstable_cache(
+  async (tenantId: string) => {
     const products = await prisma.product.findMany({
-      where: { tenantId: session.tenantId },
+      where: { tenantId },
       include: {
         reorderConfig: true,
         stockMovements: {
@@ -22,7 +20,7 @@ export async function GET(request: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    const levels = await Promise.all(
+    return Promise.all(
       products.map(async (product) => {
         const sum = await prisma.stockMovement.aggregate({
           where: { productId: product.id },
@@ -41,10 +39,26 @@ export async function GET(request: NextRequest) {
           thresholdBottles: product.reorderConfig
             ? Math.round(Number(product.reorderConfig.thresholdBottles))
             : null,
-          lastMovement: product.stockMovements[0] ?? null,
+          lastMovement: product.stockMovements[0]
+            ? {
+                ...product.stockMovements[0],
+                createdAt: product.stockMovements[0].createdAt.toISOString(),
+              }
+            : null,
         };
       }),
     );
+  },
+  ["inventory-levels"],
+  { tags: ["inventory-levels"], revalidate: 5 },
+);
+
+export async function GET(request: NextRequest) {
+  const startedAt = Date.now();
+  const session = await requireApiSession(request);
+  if (!isSession(session)) return session;
+  try {
+    const levels = await getCachedInventoryLevels(session.tenantId);
 
     recordApiMetric("GET /api/inventory/levels", 200, Date.now() - startedAt);
     return Response.json({ ok: true, levels });

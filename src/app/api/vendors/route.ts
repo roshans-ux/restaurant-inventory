@@ -1,16 +1,25 @@
 import { NextRequest } from "next/server";
+import { unstable_cache, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 
-export async function GET(request: NextRequest) {
-  const session = await requireApiSession(request);
-  if (!isSession(session)) return session;
+const getCachedVendorsLean = unstable_cache(
+  async (tenantId: string) =>
+    prisma.vendor.findMany({
+      where: { tenantId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ["vendors-lean"],
+  { tags: ["vendors"], revalidate: 60 },
+);
 
-  try {
-    const vendors = await prisma.vendor.findMany({
-      where: { tenantId: session.tenantId },
+const getCachedVendorsFull = unstable_cache(
+  async (tenantId: string) =>
+    prisma.vendor.findMany({
+      where: { tenantId },
       orderBy: { name: "asc" },
       include: {
         products: {
@@ -18,7 +27,21 @@ export async function GET(request: NextRequest) {
           orderBy: { name: "asc" },
         },
       },
-    });
+    }),
+  ["vendors-full"],
+  { tags: ["vendors"], revalidate: 60 },
+);
+
+export async function GET(request: NextRequest) {
+  const session = await requireApiSession(request);
+  if (!isSession(session)) return session;
+
+  try {
+    const fields = request.nextUrl.searchParams.get("fields");
+    const lean = fields === "id,name";
+    const vendors = lean
+      ? await getCachedVendorsLean(session.tenantId)
+      : await getCachedVendorsFull(session.tenantId);
     return apiOk({ vendors });
   } catch (error) {
     return apiError("VENDORS_FETCH_FAILED", "Failed to fetch vendors", 500, {
@@ -45,6 +68,7 @@ export async function POST(request: NextRequest) {
         whatsappNumber: payload.whatsappNumber.trim(),
       },
     });
+    revalidateTag("vendors", { expire: 0 });
     return apiOk({ vendor }, 201);
   } catch (error) {
     return apiError("VENDOR_CREATE_FAILED", "Failed to create vendor", 400, {

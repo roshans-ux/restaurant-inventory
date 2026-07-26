@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Send, XCircle } from "lucide-react";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
+import { useAdminSession } from "@/components/admin/AdminSessionContext";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import { buildCancelTxt, buildModifyTxt, buildOrderTxt } from "@/lib/vendor-messages";
 
@@ -27,12 +28,12 @@ type StockOrder = {
 const CANCELLABLE = new Set(["PENDING", "MODIFIED", "PLACED"]);
 
 export default function StockOrdersPage() {
+  const { venueName } = useAdminSession();
   const [orders, setOrders] = useState<StockOrder[]>([]);
   const [tab, setTab] = useState<Tab>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [venueName, setVenueName] = useState("My Restaurant");
   const [editQty, setEditQty] = useState<Record<string, string>>({});
   const [sortField, setSortField] = useState<SortField>("created");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -42,23 +43,13 @@ export default function StockOrdersPage() {
     setLoading(true);
     setError("");
     try {
-      const [ordersRes, meRes] = await Promise.all([
-        fetch("/api/stock-orders?status=all"),
-        fetch("/api/auth/me"),
-      ]);
+      const ordersRes = await fetch("/api/stock-orders?status=all");
       const ordersData = await readJsonResponse<{
         ok?: boolean;
         data?: { orders?: StockOrder[] };
         error?: { message?: string; details?: unknown };
       }>(ordersRes);
-      const meData = await readJsonResponse<{
-        ok?: boolean;
-        data?: { tenant?: { name: string } };
-      }>(meRes);
 
-      if (meData.ok && meData.data?.tenant?.name) {
-        setVenueName(meData.data.tenant.name);
-      }
       if (ordersData.ok) {
         setOrders(ordersData.data?.orders ?? []);
       } else if (!ordersRes.ok) {
@@ -168,6 +159,7 @@ export default function StockOrdersPage() {
       });
       const data = await readJsonResponse<{
         ok?: boolean;
+        data?: { order?: StockOrder };
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Update failed"));
@@ -176,7 +168,22 @@ export default function StockOrdersPage() {
         delete next[orderId];
         return next;
       });
-      await load();
+      const updated = data.data?.order;
+      if (updated) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)));
+      } else {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  quantityBottles: qty,
+                  status: qty !== o.quantityBottles ? "MODIFIED" : o.status,
+                }
+              : o,
+          ),
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -199,6 +206,13 @@ export default function StockOrdersPage() {
   async function cancelOrder(orderId: string) {
     setActing(true);
     setError("");
+    const previous = orders;
+    const nowIso = new Date().toISOString();
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId ? { ...o, status: "CANCELLED", cancelledAt: nowIso } : o,
+      ),
+    );
     try {
       const res = await fetch(`/api/stock-orders/${orderId}`, {
         method: "PATCH",
@@ -207,13 +221,18 @@ export default function StockOrdersPage() {
       });
       const data = await readJsonResponse<{
         ok?: boolean;
-        data?: { file?: { filename: string; content: string } };
+        data?: { file?: { filename: string; content: string }; order?: StockOrder };
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Cancel failed"));
       if (data.data?.file) downloadVendorFiles([data.data.file]);
-      await load();
+      if (data.data?.order) {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, ...data.data!.order! } : o)),
+        );
+      }
     } catch (err) {
+      setOrders(previous);
       setError(err instanceof Error ? err.message : "Cancel failed");
     } finally {
       setActing(false);
@@ -224,11 +243,19 @@ export default function StockOrdersPage() {
     if (selected.size === 0) return;
     setActing(true);
     setError("");
+    const ids = [...selected];
+    const previous = orders;
+    const nowIso = new Date().toISOString();
+    setOrders((prev) =>
+      prev.map((o) =>
+        ids.includes(o.id) ? { ...o, status: "PLACED", placedAt: nowIso } : o,
+      ),
+    );
     try {
       const res = await fetch("/api/stock-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "place", orderIds: [...selected] }),
+        body: JSON.stringify({ action: "place", orderIds: ids }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
@@ -238,8 +265,8 @@ export default function StockOrdersPage() {
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Place failed"));
       if (data.data?.files?.length) downloadVendorFiles(data.data.files);
       setSelected(new Set());
-      await load();
     } catch (err) {
+      setOrders(previous);
       setError(err instanceof Error ? err.message : "Place failed");
     } finally {
       setActing(false);
@@ -250,11 +277,12 @@ export default function StockOrdersPage() {
     if (selected.size === 0) return;
     setActing(true);
     setError("");
+    const ids = [...selected];
     try {
       const res = await fetch("/api/stock-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "cancel", orderIds: [...selected] }),
+        body: JSON.stringify({ action: "cancel", orderIds: ids }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
@@ -263,8 +291,13 @@ export default function StockOrdersPage() {
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Cancel failed"));
       if (data.data?.files?.length) downloadVendorFiles(data.data.files);
+      const nowIso = new Date().toISOString();
+      setOrders((prev) =>
+        prev.map((o) =>
+          ids.includes(o.id) ? { ...o, status: "CANCELLED", cancelledAt: nowIso } : o,
+        ),
+      );
       setSelected(new Set());
-      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Cancel failed");
     } finally {
@@ -416,9 +449,26 @@ export default function StockOrdersPage() {
       )}
 
       {loading ? (
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Loading…
-        </p>
+        <div
+          className="overflow-hidden rounded-xl"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="flex gap-4 px-4 py-3"
+              style={{
+                background: "var(--surface-elevated)",
+                borderBottom: i < 5 ? "1px solid var(--border-subtle)" : undefined,
+              }}
+            >
+              <div className="h-4 flex-1 animate-pulse rounded bg-[var(--border)]" />
+              <div className="h-4 w-24 animate-pulse rounded bg-[var(--border)]" />
+              <div className="h-4 w-16 animate-pulse rounded bg-[var(--border)]" />
+              <div className="h-4 w-20 animate-pulse rounded bg-[var(--border)]" />
+            </div>
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
         <div
           className="rounded-xl p-8 text-center text-sm"

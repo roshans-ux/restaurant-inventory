@@ -7,6 +7,7 @@ import RecentSalesTable, { type RecentSaleRow } from "@/components/admin/RecentS
 import StockActivityTable, { type StockActivityRow } from "@/components/admin/StockActivityTable";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
 import TopSellingSkusChart from "@/components/admin/TopSellingSkusChart";
+import Skeleton from "@/components/admin/Skeleton";
 import { formatBottleStock } from "@/lib/format-bottles";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import { shiftReportFilename } from "@/lib/shift-report-filename";
@@ -395,7 +396,26 @@ export default function Dashboard() {
       <TopSellingSkusChart />
 
       {loading ? (
-        <div className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</div>
+        <>
+          <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="rounded-xl p-5"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+              >
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="mt-3 h-8 w-16" />
+                <Skeleton className="mt-2 h-3 w-24" />
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        </>
       ) : (
         <>
           <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-3">

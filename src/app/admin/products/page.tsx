@@ -52,6 +52,7 @@ export default function ProductsPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [sortField, setSortField] = useState<ProductSortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const deleteConfirmRef = useRef<HTMLButtonElement | null>(null);
@@ -101,7 +102,7 @@ export default function ProductsPage() {
     try {
       const [prodRes, vendorRes] = await Promise.all([
         fetch("/api/products"),
-        fetch("/api/vendors"),
+        fetch("/api/vendors?fields=id,name"),
       ]);
       if (!prodRes.ok) {
         throw new Error(`Failed to load products (${prodRes.status})`);
@@ -117,6 +118,8 @@ export default function ProductsPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load products");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -192,6 +195,9 @@ export default function ProductsPage() {
       });
 
       const data = await readJsonResponse<{
+        ok?: boolean;
+        product?: Product;
+        data?: { product?: Product };
         error?: string | { message?: string };
       }>(res);
 
@@ -201,6 +207,29 @@ export default function ProductsPage() {
             ? data.error
             : getApiErrorMessage({ error: typeof data.error === "object" ? data.error : undefined }, `Failed to save bottle (${res.status})`);
         throw new Error(msg);
+      }
+
+      const saved = data.product ?? data.data?.product;
+      if (!saved) {
+        throw new Error("Server did not return the saved bottle");
+      }
+
+      const thresholdBottles = String(Math.max(0, Math.round(Number(thresholdInput) || 0)));
+      const reorderQuantity = Math.max(1, Math.round(Number(reorderQtyInput) || 6));
+      const nextProduct: Product = {
+        ...saved,
+        bottleSizeMl: String(saved.bottleSizeMl),
+        defaultPourMl: String(saved.defaultPourMl ?? saved.bottleSizeMl),
+        reorderConfig: {
+          thresholdBottles,
+          reorderQuantity,
+        },
+      };
+
+      if (editingProductId) {
+        setProducts((prev) => prev.map((p) => (p.id === editingProductId ? { ...p, ...nextProduct } : p)));
+      } else {
+        setProducts((prev) => [...prev, nextProduct]);
       }
 
       setEditingProductId(null);
@@ -213,7 +242,6 @@ export default function ProductsPage() {
       setVendorIdInput("");
       setSuggestions([]);
       setShowForm(false);
-      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save bottle");
     } finally {
@@ -243,6 +271,15 @@ export default function ProductsPage() {
   async function deleteProduct(product: Product) {
     setDeleting(true);
     setError("");
+    const previous = products;
+    setProducts((prev) => prev.filter((p) => p.id !== product.id));
+    setDeleteTarget(null);
+    if (editingProductId === product.id) {
+      setEditingProductId(null);
+      setShowForm(false);
+      setNameInput("");
+      setSkuInput("");
+    }
     try {
       const res = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
       const raw = await res.text();
@@ -262,15 +299,8 @@ export default function ProductsPage() {
                 : `Failed to delete (${res.status})`);
         throw new Error(msg);
       }
-      if (editingProductId === product.id) {
-        setEditingProductId(null);
-        setShowForm(false);
-        setNameInput("");
-        setSkuInput("");
-      }
-      setDeleteTarget(null);
-      await load();
     } catch (err) {
+      setProducts(previous);
       setError(err instanceof Error ? err.message : "Failed to delete bottle");
     } finally {
       setDeleting(false);
@@ -595,7 +625,30 @@ export default function ProductsPage() {
         </form>
       )}
 
-      {products.length === 0 ? (
+      {loading ? (
+        <div
+          className="overflow-hidden rounded-xl"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          <div className="space-y-0">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className="flex gap-4 px-4 py-3"
+                style={{
+                  background: "var(--surface-elevated)",
+                  borderBottom: i < 5 ? "1px solid var(--border-subtle)" : undefined,
+                }}
+              >
+                <div className="h-4 flex-1 animate-pulse rounded bg-[var(--border)]" />
+                <div className="h-4 w-20 animate-pulse rounded bg-[var(--border)]" />
+                <div className="h-4 w-16 animate-pulse rounded bg-[var(--border)]" />
+                <div className="h-4 w-24 animate-pulse rounded bg-[var(--border)]" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : products.length === 0 ? (
         <div
           className="flex flex-col items-center justify-center rounded-xl py-20"
           style={{ border: "2px dashed var(--border)", color: "var(--text-muted)" }}

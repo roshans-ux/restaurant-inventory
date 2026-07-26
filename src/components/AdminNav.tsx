@@ -16,6 +16,7 @@ import {
   Bell,
 } from "lucide-react";
 import NotificationsPopover from "@/components/admin/NotificationsPopover";
+import { useAdminSession } from "@/components/admin/AdminSessionContext";
 
 const links = [
   {
@@ -69,19 +70,10 @@ const links = [
   },
 ];
 
-type MeResponse = {
-  ok?: boolean;
-  data?: {
-    tenant?: { name: string };
-    user?: { email: string };
-  };
-};
-
 export default function AdminNav({ authPaused = false }: { authPaused?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [venueName, setVenueName] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
+  const { venueName, email } = useAdminSession();
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -97,18 +89,6 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
     } catch {
       /* ignore */
     }
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data: MeResponse) => {
-        if (data.ok && data.data) {
-          setVenueName(data.data.tenant?.name ?? null);
-          setEmail(data.data.user?.email ?? null);
-        }
-      })
-      .catch(() => {});
   }, []);
 
   useEffect(() => {

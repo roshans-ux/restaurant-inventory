@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
@@ -34,6 +35,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           : {}),
       },
     });
+    revalidateTag("vendors", { expire: 0 });
     return apiOk({ vendor });
   } catch (error) {
     return apiError("VENDOR_UPDATE_FAILED", "Failed to update vendor", 400, {
@@ -56,6 +58,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     }
 
     await prisma.vendor.delete({ where: { id } });
+    revalidateTag("vendors", { expire: 0 });
     return apiOk({ deleted: true, id });
   } catch (error) {
     return apiError("VENDOR_DELETE_FAILED", "Failed to delete vendor", 400, {

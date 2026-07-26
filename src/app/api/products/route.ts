@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { unstable_cache, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_BOTTLE_SIZE_ML } from "@/lib/inventory";
@@ -29,16 +30,23 @@ const productSchema = z.object({
   vendorId: z.string().uuid().nullable().optional(),
 });
 
+const getCachedProducts = unstable_cache(
+  async (tenantId: string) =>
+    prisma.product.findMany({
+      where: { tenantId },
+      include: { reorderConfig: true, vendor: true },
+      orderBy: { name: "asc" },
+    }),
+  ["products"],
+  { tags: ["products"], revalidate: 60 },
+);
+
 export async function GET(request: NextRequest) {
   const startedAt = Date.now();
   const session = await requireApiSession(request);
   if (!isSession(session)) return session;
   try {
-    const products = await prisma.product.findMany({
-      where: { tenantId: session.tenantId },
-      include: { reorderConfig: true, vendor: true },
-      orderBy: { name: "asc" },
-    });
+    const products = await getCachedProducts(session.tenantId);
     recordApiMetric("GET /api/products", 200, Date.now() - startedAt);
     return Response.json({ ok: true, products });
   } catch (error) {
@@ -151,6 +159,7 @@ export async function POST(request: NextRequest) {
     }
 
     recordApiMetric("POST /api/products", 201, Date.now() - startedAt);
+    revalidateTag("products", { expire: 0 });
     return Response.json({ ok: true, product: result }, { status: 201 });
   } catch (error) {
     recordApiMetric("POST /api/products", 400, Date.now() - startedAt);

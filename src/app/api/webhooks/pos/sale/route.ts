@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createHash } from "node:crypto";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { QuantityUnit } from "@prisma/client";
 import { evaluateLowStock, isWithinReplayWindow, verifyWebhookSignature } from "@/lib/inventory";
@@ -194,6 +195,7 @@ export async function POST(request: NextRequest) {
         }
       }),
     );
+    revalidateTag("inventory-levels", { expire: 0 });
     const response = apiOk({ saleId: result.id, accepted: true });
     recordApiMetric("POST /api/webhooks/pos/sale", 200, Date.now() - startedAt);
     return response;

@@ -93,7 +93,9 @@ export default function HandoverPage() {
       });
       const data = await readJsonResponse<{
         ok?: boolean;
-        data?: { rotation?: { barcodeId: string; productName: string } };
+        data?: {
+          rotation?: ActiveRotation & { sku?: string | null; bottleSizeMl?: number };
+        };
         error?: { message?: string };
       }>(res);
       if (!res.ok || data.ok === false) {
@@ -104,7 +106,20 @@ export default function HandoverPage() {
       setMessage(`Bottle ${r.barcodeId} is now in rotation for ${r.productName}`);
       setBarcode("");
       barcodeRef.current?.focus();
-      await load();
+      setActiveRotations((prev) => {
+        const withoutSameSku = prev.filter((x) => x.productId !== r.productId);
+        return [
+          {
+            id: r.id,
+            productId: r.productId,
+            productName: r.productName,
+            barcodeId: r.barcodeId,
+            openedAt: r.openedAt,
+            mlRemaining: r.mlRemaining,
+          },
+          ...withoutSameSku,
+        ];
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log bottle");
     } finally {
@@ -114,13 +129,18 @@ export default function HandoverPage() {
 
   async function closeRotation(id: string) {
     setError("");
-    const res = await fetch(`/api/handover/${id}/close`, { method: "POST" });
-    const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string } }>(res);
-    if (!res.ok || data.ok === false) {
-      setError(getApiErrorMessage(data, "Failed to close bottle"));
-      return;
+    const previous = activeRotations;
+    setActiveRotations((prev) => prev.filter((r) => r.id !== id));
+    try {
+      const res = await fetch(`/api/handover/${id}/close`, { method: "POST" });
+      const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string } }>(res);
+      if (!res.ok || data.ok === false) {
+        throw new Error(getApiErrorMessage(data, "Failed to close bottle"));
+      }
+    } catch (err) {
+      setActiveRotations(previous);
+      setError(err instanceof Error ? err.message : "Failed to close bottle");
     }
-    await load();
   }
 
   return (
@@ -216,9 +236,26 @@ export default function HandoverPage() {
               Active rotations
             </h2>
             {loading ? (
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                Loading…
-              </p>
+              <div
+                className="overflow-hidden rounded-xl"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="flex gap-4 px-4 py-3"
+                    style={{
+                      background: "var(--surface-elevated)",
+                      borderBottom: i < 3 ? "1px solid var(--border-subtle)" : undefined,
+                    }}
+                  >
+                    <div className="h-4 flex-1 animate-pulse rounded bg-[var(--border)]" />
+                    <div className="h-4 w-24 animate-pulse rounded bg-[var(--border)]" />
+                    <div className="h-4 w-28 animate-pulse rounded bg-[var(--border)]" />
+                    <div className="h-4 w-16 animate-pulse rounded bg-[var(--border)]" />
+                  </div>
+                ))}
+              </div>
             ) : activeRotations.length === 0 ? (
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 No bottles currently in rotation

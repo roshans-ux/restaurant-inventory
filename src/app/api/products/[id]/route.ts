@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
@@ -181,6 +182,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     recordApiMetric("PATCH /api/products/[id]", 200, Date.now() - startedAt);
+    revalidateTag("products", { expire: 0 });
     return apiOk({ product: updated });
   } catch (error) {
     recordApiMetric("PATCH /api/products/[id]", 400, Date.now() - startedAt);
@@ -211,6 +213,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     });
 
     recordApiMetric("DELETE /api/products/[id]", 200, Date.now() - startedAt);
+    revalidateTag("products", { expire: 0 });
     return apiOk({ deleted: true, id });
   } catch (error) {
     recordApiMetric("DELETE /api/products/[id]", 400, Date.now() - startedAt);

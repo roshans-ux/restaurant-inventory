@@ -158,20 +158,27 @@ export default function StockPage() {
   const [levelsSortDirection, setLevelsSortDirection] = useState<SortDirection>("asc");
   const [levelsSearch, setLevelsSearch] = useState("");
 
-  const load = useCallback(async () => {
-    const [pr, lv, ac] = await Promise.all([
-      fetch("/api/products").then((r) => r.json()),
+  const [levelsLoading, setLevelsLoading] = useState(true);
+
+  const loadCatalog = useCallback(async () => {
+    const pr = await fetch("/api/products").then((r) => r.json());
+    setProducts(pr.products ?? []);
+  }, []);
+
+  const refreshStock = useCallback(async () => {
+    const [lv, ac] = await Promise.all([
       fetch("/api/inventory/levels").then((r) => r.json()),
       fetch("/api/inventory/activity").then((r) => r.json() as Promise<ActivityResponse>),
     ]);
-    setProducts(pr.products ?? []);
     setLevels(lv.levels ?? []);
     setActivity(ac.data?.activity ?? []);
+    setLevelsLoading(false);
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadCatalog();
+    void refreshStock();
+  }, [loadCatalog, refreshStock]);
 
   const selectedLevel = useMemo(
     () => levels.find((l) => l.productId === productId),
@@ -341,7 +348,7 @@ export default function StockPage() {
         const delta = typeof ml === "number" ? `${ml >= 0 ? "+" : ""}${ml}ml` : "updated";
         setLastResult(`${selectedProduct?.name ?? "Bottle"}: ${delta}`);
       }
-      await load();
+      await refreshStock();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed");
     } finally {
@@ -607,7 +614,13 @@ export default function StockPage() {
               />
             )}
           </div>
-          {levels.length === 0 ? (
+          {levelsLoading ? (
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-8 w-full animate-pulse rounded bg-[var(--border)]" />
+              ))}
+            </div>
+          ) : levels.length === 0 ? (
             <div className="flex flex-1 items-center justify-center p-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
               No bottles yet
             </div>
@@ -686,8 +699,10 @@ export default function StockPage() {
         open={showAddBottleModal}
         onClose={() => setShowAddBottleModal(false)}
         existingProducts={products}
-        onCreated={async (product) => {
-          await load();
+        onCreated={(product) => {
+          setProducts((prev) =>
+            prev.some((p) => p.id === product.id) ? prev : [...prev, product as Product],
+          );
           setProductId(product.id);
           setLastResult(`Added ${product.name} — select quantity and record delivery.`);
         }}

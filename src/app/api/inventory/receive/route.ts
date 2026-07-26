@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { QuantityUnit, StockMovementType } from "@prisma/client";
 import { evaluateLowStock } from "@/lib/inventory";
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
     });
 
     await evaluateLowStock(parsed.productId);
+    revalidateTag("inventory-levels", { expire: 0 });
     recordApiMetric("POST /api/inventory/receive", 201, Date.now() - startedAt);
     return apiOk({ movement }, 201);
   } catch (error) {

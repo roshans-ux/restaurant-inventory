@@ -9,7 +9,6 @@ import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { findProductForTenant } from "@/lib/tenant";
 import {
   isPosItemConfigured,
-  syncDraftMappingsForTenant,
 } from "@/lib/pos-draft-mappings";
 import { excludeDraftSuppressionMappings } from "@/lib/pos-mapping-utils";
 import { isBeerBottleSize } from "@/lib/product-naming";
@@ -40,36 +39,17 @@ export async function GET(request: NextRequest) {
   const session = await requireApiSession(request);
   if (!isSession(session)) return session;
   try {
-    let draftSyncWarning: string | undefined;
-
-    const mappingsBeforeSync = await prisma.posMenuMapping.findMany({
+    const mappings = await prisma.posMenuMapping.findMany({
       where: { tenantId: session.tenantId, ...excludeDraftSuppressionMappings() },
       include: { product: true },
       orderBy: { createdAt: "desc" },
     });
-
-    try {
-      await syncDraftMappingsForTenant(session.tenantId);
-    } catch (syncError) {
-      console.error("POS mapping draft sync failed:", syncError);
-      draftSyncWarning =
-        syncError instanceof Error ? syncError.message : "Draft mapping sync failed";
-    }
-
-    const mappings = draftSyncWarning
-      ? mappingsBeforeSync
-      : await prisma.posMenuMapping.findMany({
-          where: { tenantId: session.tenantId, ...excludeDraftSuppressionMappings() },
-          include: { product: true },
-          orderBy: { createdAt: "desc" },
-        });
 
     recordApiMetric("GET /api/pos-mappings", 200, Date.now() - startedAt);
     return Response.json({
       ok: true,
       mappings,
       defaultPoursMl: DEFAULT_POURS_ML,
-      ...(draftSyncWarning ? { draftSyncWarning } : {}),
     });
   } catch (error) {
     recordApiMetric("GET /api/pos-mappings", 500, Date.now() - startedAt);

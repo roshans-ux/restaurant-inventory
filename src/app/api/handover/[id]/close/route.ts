@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { closeBottleRotation } from "@/lib/slippage";
@@ -12,6 +13,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
     const result = await closeBottleRotation(id, session.tenantId);
+    revalidateTag("inventory-levels", { expire: 0 });
     return apiOk({
       rotationId: id,
       slippageMl: result.slippageMl,

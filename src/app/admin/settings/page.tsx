@@ -125,19 +125,49 @@ export default function SettingsPage() {
     e.preventDefault();
     setSavingSettings(true);
     setSettingsMsg("");
+    const previousTenant = tenant;
+    const previousSlippage = slippage;
+    const previousSchedule = schedule;
+    const nextSlippage = Math.round(Number(slippage));
+    const nextSchedule = schedule;
+    if (tenant) {
+      setTenant({
+        ...tenant,
+        slippageTolerancePercent: nextSlippage,
+        shiftSchedule: nextSchedule,
+      });
+    }
+    setSettingsMsg("Saved");
     try {
       const res = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          slippageTolerancePercent: Math.round(Number(slippage)),
-          shiftSchedule: schedule,
+          slippageTolerancePercent: nextSlippage,
+          shiftSchedule: nextSchedule,
         }),
       });
-      const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string; details?: unknown } }>(res);
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        data?: {
+          slippageTolerancePercent?: number;
+          shiftSchedule?: Record<DayKey, DayShift | null>;
+        };
+        error?: { message?: string; details?: unknown };
+      }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Save failed"));
-      setSettingsMsg("Settings saved");
+      if (tenant && data.data) {
+        setTenant({
+          ...tenant,
+          slippageTolerancePercent: data.data.slippageTolerancePercent ?? nextSlippage,
+          shiftSchedule: data.data.shiftSchedule ?? nextSchedule,
+        });
+      }
+      setSettingsMsg("Saved");
     } catch (err) {
+      setTenant(previousTenant);
+      setSlippage(previousSlippage);
+      setSchedule(previousSchedule);
       setSettingsMsg(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSavingSettings(false);
@@ -154,11 +184,22 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: vendorName, whatsappNumber: vendorPhone }),
       });
-      const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string; details?: unknown } }>(res);
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        data?: { vendor?: Vendor };
+        error?: { message?: string; details?: unknown };
+      }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to add vendor"));
+      const vendor = data.data?.vendor;
+      if (vendor) {
+        setVendors((prev) =>
+          [...prev, { ...vendor, products: vendor.products ?? [] }].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
+        );
+      }
       setVendorName("");
       setVendorPhone("");
-      await loadAll();
     } catch (err) {
       setVendorError(err instanceof Error ? err.message : "Failed to add vendor");
     } finally {
@@ -167,8 +208,22 @@ export default function SettingsPage() {
   }
 
   async function deleteVendor(id: string) {
-    const res = await fetch(`/api/vendors/${id}`, { method: "DELETE" });
-    if (res.ok) await loadAll();
+    setVendorError("");
+    const previous = vendors;
+    setVendors((prev) => prev.filter((v) => v.id !== id));
+    if (editingVendorId === id) {
+      cancelEditVendor();
+    }
+    try {
+      const res = await fetch(`/api/vendors/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await readJsonResponse<{ error?: { message?: string } }>(res);
+        throw new Error(getApiErrorMessage(data, "Failed to delete vendor"));
+      }
+    } catch (err) {
+      setVendors(previous);
+      setVendorError(err instanceof Error ? err.message : "Failed to delete vendor");
+    }
   }
 
   function startEditVendor(v: Vendor) {
@@ -196,10 +251,25 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: editVendorName, whatsappNumber: editVendorPhone }),
       });
-      const data = await readJsonResponse<{ ok?: boolean; error?: { message?: string; details?: unknown } }>(res);
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        data?: { vendor?: Vendor };
+        error?: { message?: string; details?: unknown };
+      }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to update vendor"));
+      const vendor = data.data?.vendor;
+      if (vendor) {
+        setVendors((prev) =>
+          prev
+            .map((v) =>
+              v.id === editingVendorId
+                ? { ...v, name: vendor.name, whatsappNumber: vendor.whatsappNumber }
+                : v,
+            )
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        );
+      }
       cancelEditVendor();
-      await loadAll();
     } catch (err) {
       setVendorError(err instanceof Error ? err.message : "Failed to update vendor");
     } finally {

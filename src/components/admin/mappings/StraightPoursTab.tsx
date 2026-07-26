@@ -319,6 +319,12 @@ export default function StraightPoursTab() {
   async function deleteMapping(mapping: Mapping) {
     setDeleting(true);
     setError("");
+    const previous = mappings;
+    setMappings((prev) => prev.filter((m) => m.id !== mapping.id));
+    setDeleteTarget(null);
+    if (editingId === mapping.id) {
+      resetForm();
+    }
     try {
       const res = await fetch(`/api/pos-mappings/${mapping.id}`, { method: "DELETE" });
       const raw = await res.text();
@@ -331,13 +337,8 @@ export default function StraightPoursTab() {
       if (!res.ok || data.ok === false || data.error) {
         throw new Error(getApiErrorMessage(data, "Failed to delete mapping"));
       }
-      if (editingId === mapping.id) {
-        resetForm();
-      }
-      setMappings((prev) => prev.filter((m) => m.id !== mapping.id));
-      setDeleteTarget(null);
-      await load();
     } catch (err) {
+      setMappings(previous);
       setError(err instanceof Error ? err.message : "Failed to delete mapping");
     } finally {
       setDeleting(false);
@@ -367,8 +368,14 @@ export default function StraightPoursTab() {
     if (!res.ok || data.ok === false || data.error) {
       setError(getApiErrorMessage(data, "Failed to save mapping"));
     } else {
-      setOk(`${editingId ? "Updated" : "Mapped"}: ${data.mapping.posItemId}`);
-      await load();
+      const mapping = data.mapping as Mapping;
+      setOk(`${editingId ? "Updated" : "Mapped"}: ${mapping.posItemId}`);
+      setMappings((prev) => {
+        if (editingId) {
+          return prev.map((m) => (m.id === editingId ? mapping : m));
+        }
+        return [mapping, ...prev];
+      });
       resetForm();
     }
     setSaving(false);
