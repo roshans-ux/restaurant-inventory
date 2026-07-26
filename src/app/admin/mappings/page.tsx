@@ -44,7 +44,7 @@ export default function MappingsPage() {
       </div>
 
       <div style={{ display: tab === "pours" ? "block" : "none" }}>
-        <StraightPoursTab />
+        <StraightPoursTab active={tab === "pours"} />
       </div>
       <div style={{ display: tab === "cocktails" ? "block" : "none" }}>
         <CocktailsTab />

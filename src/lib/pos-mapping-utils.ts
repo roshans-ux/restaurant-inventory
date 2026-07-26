@@ -24,9 +24,14 @@ export function isDraftSuppressedPosItemId(posItemId: string | null | undefined)
 }
 
 export function excludeDraftSuppressionMappings(): Prisma.PosMenuMappingWhereInput {
+  // Avoid `NOT { startsWith }` alone — in SQL, NULL fails the LIKE check and is
+  // excluded, which would hide draft rows (posItemId null).
   return {
     NOT: {
-      posItemId: { startsWith: DRAFT_SUPPRESSED_PREFIX },
+      AND: [
+        { posItemId: { not: null } },
+        { posItemId: { startsWith: DRAFT_SUPPRESSED_PREFIX } },
+      ],
     },
   };
 }

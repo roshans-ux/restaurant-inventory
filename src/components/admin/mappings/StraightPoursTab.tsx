@@ -126,7 +126,7 @@ function PosItemIdCell({
   );
 }
 
-export default function StraightPoursTab() {
+export default function StraightPoursTab({ active = true }: { active?: boolean }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [mappings, setMappings] = useState<Mapping[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,6 +148,18 @@ export default function StraightPoursTab() {
 
   const load = useCallback(async () => {
     setLoadError("");
+    let syncWarning = "";
+    try {
+      const syncRes = await fetch("/api/pos-mappings/sync-drafts", { method: "POST" });
+      const syncData = await syncRes.json();
+      if (!syncRes.ok || syncData.ok === false) {
+        syncWarning = getApiErrorMessage(syncData, "Draft mapping sync failed");
+      }
+    } catch (err) {
+      syncWarning = err instanceof Error ? err.message : "Draft mapping sync failed";
+    }
+    setDraftSyncWarning(syncWarning);
+
     const [productsRes, mappingsRes] = await Promise.all([
       fetch("/api/products"),
       fetch("/api/pos-mappings"),
@@ -167,7 +179,6 @@ export default function StraightPoursTab() {
       setMappings([]);
     } else {
       setMappings(mp.mappings ?? []);
-      setDraftSyncWarning(mp.draftSyncWarning ?? "");
     }
     if (errors.length > 0) {
       setLoadError(errors.join(" · "));
@@ -176,8 +187,9 @@ export default function StraightPoursTab() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!active) return;
+    void load();
+  }, [active, load]);
 
   useEffect(() => {
     if (deleteTarget) {

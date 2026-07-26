@@ -121,6 +121,19 @@ export default function SettingsPage() {
     loadAll();
   }, []);
 
+  function copyDayToAll(sourceKey: DayKey) {
+    setSchedule((prev) => {
+      const source = prev[sourceKey];
+      if (!source?.start && !source?.end) return prev;
+      const next = { ...prev };
+      for (const key of DAY_KEYS) {
+        if (key === sourceKey) continue;
+        next[key] = { start: source.start ?? null, end: source.end ?? null };
+      }
+      return next;
+    });
+  }
+
   async function saveSettings(e: FormEvent) {
     e.preventDefault();
     setSavingSettings(true);
@@ -350,10 +363,11 @@ export default function SettingsPage() {
               {DAY_KEYS.map((key: DayKey) => {
                 const day = schedule[key];
                 const prefilledStart = day?.start ?? getPreviousDayShiftEnd(schedule, new Date()) ?? "";
+                const canCopy = Boolean(day?.start || day?.end);
                 return (
                   <div
                     key={key}
-                    className="grid gap-2 rounded-lg p-3 sm:grid-cols-[7rem_1fr_1fr]"
+                    className="grid gap-2 rounded-lg p-3 sm:grid-cols-[7rem_1fr_1fr_auto] sm:items-end"
                     style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}
                   >
                     <span className="text-xs font-medium self-center" style={{ color: "var(--text-muted)" }}>
@@ -404,6 +418,17 @@ export default function SettingsPage() {
                         }}
                       />
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => copyDayToAll(key)}
+                      disabled={!canCopy}
+                      className="inline-flex items-center gap-1.5 justify-self-start rounded-lg px-2 py-1.5 text-xs font-medium disabled:opacity-40"
+                      style={{ color: "var(--accent)" }}
+                      title="Copy this day's times to all other days"
+                    >
+                      <Copy size={14} />
+                      Copy to all
+                    </button>
                   </div>
                 );
               })}

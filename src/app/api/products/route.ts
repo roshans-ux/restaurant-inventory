@@ -139,24 +139,24 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      if (isBeerBottleSize(parsed.bottleSizeMl)) {
+        await reconcileBeerProductMappings(
+          tx,
+          session.tenantId,
+          product.id,
+          parsed.bottleSizeMl,
+        );
+      } else {
+        await ensureDraftMappingsForProduct(
+          tx,
+          session.tenantId,
+          product.id,
+          parsed.bottleSizeMl,
+        );
+      }
+
       return product;
     });
-
-    if (isBeerBottleSize(parsed.bottleSizeMl)) {
-      await reconcileBeerProductMappings(
-        prisma,
-        session.tenantId,
-        result.id,
-        parsed.bottleSizeMl,
-      );
-    } else {
-      await ensureDraftMappingsForProduct(
-        prisma,
-        session.tenantId,
-        result.id,
-        parsed.bottleSizeMl,
-      );
-    }
 
     recordApiMetric("POST /api/products", 201, Date.now() - startedAt);
     revalidateTag("products", { expire: 0 });
