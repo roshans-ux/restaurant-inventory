@@ -1,0 +1,112 @@
+Therapy / Bar Inventory — Progress Writeup
+Updated: 26 July 2026
+Local demo: http://localhost:3000
+Login: admin@demo.local / changeme123
+
+————————————————————————
+WHAT THIS APP IS
+————————————————————————
+
+A bar inventory system for restaurants. Stock is tracked in millilitres (ml). When a drink is sold on the POS, the right bottle is deducted automatically. Staff can receive stock, hand bottles to the bar, map menu items, simulate sales, and download end-of-shift reports.
+
+One venue = one account. Production runs on Vercel + Neon. Local testing uses localhost:3000.
+
+
+————————————————————————
+WHAT’S WORKING NOW
+————————————————————————
+
+1) DASHBOARD
+• Live stock overview (SKUs, bottles, below-threshold)
+• Top selling SKUs chart (by volume)
+• Needs Restocking list
+• Latest orders + stock activity
+• Generate / schedule / download Shift Report (CSV)
+
+2) STOCK ENTRY
+• Receive full bottles into storage
+• Log broken bottles (quarters + ml labels)
+• Send bottles back to seller
+• Full activity history with filters
+
+3) BOTTLE HANDOVER
+• Scan bottles going into rotation (pouring only)
+• Info banner: don’t scan full bottles sold whole
+• Active rotations table (ml remaining)
+• Close bottle → slippage check / alert
+• Beer sizes (330ml / 650ml) hidden from scan dropdown
+
+4) STOCK ORDERS
+• Auto-created when stock falls below threshold
+• Tabs: All / Pending / Placed / Cancelled
+• Place, modify, cancel + WhatsApp TXT download for vendors
+
+5) BOTTLES
+• Add / edit SKUs, sizes, thresholds, vendors
+• Sizes: 330ml, 650ml, 750ml, 1L, 1.75L, 2L
+• Beer = full-bottle POS mapping only
+
+6) POS MAPPINGS
+• Straight pours: spirits auto-get 30ml, 60ml, full-bottle rows
+• Beer: one full-bottle row; set POS Item ID only
+• Cocktails: multi-ingredient recipes
+• Newest mappings at the top of the list
+
+7) POS SIMULATOR
+• Test sales without a real POS
+• See inventory deduct in real time
+• Recent Sales with date filter (Today by default)
+• Past dates only (no future)
+
+8) SETTINGS
+• API key + webhook secret for POS integration
+• Slippage tolerance %
+• Shift start + end times per day
+• Vendors (name + WhatsApp number)
+
+
+————————————————————————
+RECENT IMPROVEMENTS (LOCAL)
+————————————————————————
+
+• Sticky sidebar (doesn’t scroll away with the page)
+• Nav labels with short helper subtext under each tab
+• Notifications bell for slippage + low-stock alerts
+• Shift reports scoped to the actual shift window (old sales don’t leak into today’s report)
+• Shift CSV includes shift date / start / end at the top
+• Handover guidance for pouring vs whole-bottle sales
+• POS mapping auto-drafts restored; beer protected from wrong edit/delete
+• POS Sim Recent Sales layout + date filter cleaned up
+
+
+————————————————————————
+HOW TO DEMO (QUICK PATH)
+————————————————————————
+
+1. Log in → Dashboard (stock + chart)
+2. Bottles → confirm SKUs exist
+3. POS Mappings → set a POS Item ID on a Not configured row
+4. POS Simulator → add item → Fire Sale → watch stock drop
+5. Bottle Handover → scan a spirit into rotation
+6. Close bottle → check slippage alert / notifications bell
+7. Settings → shift times + vendors
+8. Dashboard → Generate Shift Report → Download CSV
+
+
+————————————————————————
+TECH (SHORT)
+————————————————————————
+
+Next.js · TypeScript · PostgreSQL (Prisma) · Dark admin UI · POS webhook with API key + HMAC signature
+
+Production: Vercel
+Database (prod): Neon
+
+
+————————————————————————
+NOTE
+————————————————————————
+
+This writeup reflects progress on localhost as of the date above. Some items may still be local-only until pushed to main / Vercel.
+
+Share this file on WhatsApp as a document, or copy-paste sections into a chat.

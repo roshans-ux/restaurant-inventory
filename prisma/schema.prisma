@@ -63,6 +63,7 @@ model Tenant {
   shiftReportScheduledAt     DateTime?
   shiftReportReadyAt         DateTime?
   shiftReportWindowStartAt   DateTime?
+  shiftReportWindowEndAt     DateTime?
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
   users            User[]
@@ -241,6 +242,7 @@ model Alert {
   type       AlertType
   message    String
   resolvedAt DateTime?
+  readAt     DateTime?
   createdAt  DateTime  @default(now())
   product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 

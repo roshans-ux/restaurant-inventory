@@ -15,7 +15,7 @@ export default function MappingsPage() {
         <h1 className="text-2xl font-semibold">POS Mappings</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
           {tab === "pours"
-            ? "New bottles get 30ml, 60ml, and full-bottle rows automatically — click a POS Item ID in the table to configure them, or use the form to add or edit a mapping manually."
+            ? "Spirits get 30ml, 60ml, and full-bottle rows automatically; beer gets one full-bottle row. Click a POS Item ID in the table to configure, or use the form for spirits."
             : "Map POS cocktail items to one or more alcohol pours. Each sale deducts every ingredient from inventory."}
         </p>
       </div>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Info, RotateCcw } from "lucide-react";
 import BottleSelectDropdown from "@/components/admin/BottleSelectDropdown";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
+import { isBeerBottleSize } from "@/lib/product-naming";
 
 type Product = {
   id: string;
@@ -60,9 +61,20 @@ export default function HandoverPage() {
     setLoading(false);
   }, []);
 
+  const handoverProducts = useMemo(
+    () => products.filter((p) => !isBeerBottleSize(Number(p.bottleSizeMl))),
+    [products],
+  );
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (productId && !handoverProducts.some((p) => p.id === productId)) {
+      setProductId("");
+    }
+  }, [handoverProducts, productId]);
 
   async function submitBarcode(e?: React.FormEvent) {
     e?.preventDefault();
@@ -130,13 +142,25 @@ export default function HandoverPage() {
             <RotateCcw size={14} />
             Scan bottle into rotation
           </h2>
+          <div
+            className="mb-4 flex gap-3 items-start rounded-lg px-4 py-3"
+            style={{
+              background: "var(--blue-dim)",
+              border: "1px solid rgba(96, 165, 250, 0.25)",
+            }}
+          >
+            <Info size={16} className="shrink-0 mt-0.5" style={{ color: "var(--blue)" }} />
+            <p className="text-sm leading-relaxed" style={{ color: "var(--blue)" }}>
+              Bottles scanned here are for pouring only. If a full bottle is being sold as a whole, it should be taken directly from the main storeroom inventory and not from bottles already scanned and handed to the bar.
+            </p>
+          </div>
           <div className="grid gap-4">
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                 SKU
               </span>
               <BottleSelectDropdown
-                products={products}
+                products={handoverProducts}
                 value={productId}
                 onChange={setProductId}
               />
@@ -187,29 +211,6 @@ export default function HandoverPage() {
         </form>
 
         <div className="space-y-6">
-          {slippageAlerts.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-                Slippage alerts
-              </h2>
-              <div className="grid gap-2">
-                {slippageAlerts.map((a) => (
-                  <div
-                    key={a.id}
-                    className="rounded-lg px-4 py-3 text-sm"
-                    style={{
-                      background: "var(--red-dim)",
-                      border: "1px solid rgba(224,92,92,0.25)",
-                      color: "var(--red)",
-                    }}
-                  >
-                    {a.message}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
           <section>
             <h2 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
               Active rotations
@@ -280,6 +281,29 @@ export default function HandoverPage() {
               </div>
             )}
           </section>
+
+          {slippageAlerts.length > 0 && (
+            <section>
+              <h2 className="mb-3 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                Slippage alerts
+              </h2>
+              <div className="grid gap-2">
+                {slippageAlerts.map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-lg px-4 py-3 text-sm"
+                    style={{
+                      background: "var(--red-dim)",
+                      border: "1px solid rgba(224,92,92,0.25)",
+                      color: "var(--red)",
+                    }}
+                  >
+                    {a.message}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>

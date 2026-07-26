@@ -3,6 +3,7 @@ import { FIXED_POUR_OPTIONS_ML } from "@/lib/mapping-sale-size";
 import {
   draftPourSizesForBottle,
   draftSuppressedPosItemId,
+  isDraftSuppressedPosItemId,
 } from "@/lib/pos-mapping-utils";
 import { isBeerBottleSize } from "@/lib/product-naming";
 import { prisma } from "@/lib/prisma";
@@ -39,14 +40,23 @@ export async function ensureDraftMappingsForProduct(
       where: {
         tenantId,
         productId,
-        pourMl,
+        pourMl: pourMlDecimal(pourMl),
       },
     });
-    if (existing) continue;
 
-    await db.posMenuMapping.create({
-      data: draftMappingCreateData(tenantId, productId, pourMl),
-    });
+    if (!existing) {
+      await db.posMenuMapping.create({
+        data: draftMappingCreateData(tenantId, productId, pourMl),
+      });
+      continue;
+    }
+
+    if (isDraftSuppressedPosItemId(existing.posItemId)) {
+      await db.posMenuMapping.update({
+        where: { id: existing.id },
+        data: { posItemId: null },
+      });
+    }
   }
 }
 
@@ -57,7 +67,7 @@ export async function recordDeletedMappingSlot(
   pourMl: number,
 ) {
   const existing = await db.posMenuMapping.findFirst({
-    where: { tenantId, productId, pourMl },
+    where: { tenantId, productId, pourMl: pourMlDecimal(pourMl) },
   });
   if (existing) return;
 
@@ -78,18 +88,19 @@ export async function syncDraftMappingsForTenant(tenantId: string) {
   });
 
   for (const product of products) {
+    const bottleSizeMl = Number(product.bottleSizeMl);
     try {
-      await ensureDraftMappingsForProduct(
-        prisma,
-        tenantId,
-        product.id,
-        Number(product.bottleSizeMl),
-      );
+      if (isBeerBottleSize(bottleSizeMl)) {
+        await reconcileBeerProductMappings(prisma, tenantId, product.id, bottleSizeMl);
+      } else {
+        await ensureDraftMappingsForProduct(prisma, tenantId, product.id, bottleSizeMl);
+      }
     } catch (error) {
       console.error(
         `Draft mapping sync failed for product ${product.id}:`,
         error instanceof Error ? error.message : error,
       );
+      throw error;
     }
   }
 }
@@ -108,7 +119,7 @@ export async function updateFullBottleDraftPourSize(
       tenantId,
       productId,
       posItemId: null,
-      pourMl: previousBottleSizeMl,
+      pourMl: pourMlDecimal(previousBottleSizeMl),
     },
   });
 
@@ -117,7 +128,7 @@ export async function updateFullBottleDraftPourSize(
       where: {
         tenantId,
         productId,
-        pourMl: nextBottleSizeMl,
+        pourMl: pourMlDecimal(nextBottleSizeMl),
         NOT: { id: draftFullBottle.id },
       },
     });
@@ -129,7 +140,11 @@ export async function updateFullBottleDraftPourSize(
     }
   }
 
-  await ensureDraftMappingsForProduct(db, tenantId, productId, nextBottleSizeMl);
+  if (isBeerBottleSize(nextBottleSizeMl)) {
+    await reconcileBeerProductMappings(db, tenantId, productId, nextBottleSizeMl);
+  } else {
+    await ensureDraftMappingsForProduct(db, tenantId, productId, nextBottleSizeMl);
+  }
 }
 
 export async function reconcileBeerProductMappings(

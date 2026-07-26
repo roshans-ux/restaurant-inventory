@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { apiError, apiOk } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
+import { localDayBoundsFromParam } from "@/lib/sales-period";
 
 export async function GET(request: NextRequest) {
   const session = await requireApiSession(request);
@@ -12,8 +13,12 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const limit = Math.min(50, Math.max(1, Number(searchParams.get("limit") ?? "10") || 10));
     const skip = (page - 1) * limit;
+    const { start, end, dateLabel } = localDayBoundsFromParam(searchParams.get("date"));
 
-    const where = { tenantId: session.tenantId };
+    const where = {
+      tenantId: session.tenantId,
+      soldAt: { gte: start, lt: end },
+    };
 
     const [sales, total] = await Promise.all([
       prisma.posSale.findMany({
@@ -38,6 +43,7 @@ export async function GET(request: NextRequest) {
       page,
       limit,
       total,
+      date: dateLabel,
       totalPages: Math.max(1, Math.ceil(total / limit)),
       sales: sales.map((sale) => ({
         id: sale.id,

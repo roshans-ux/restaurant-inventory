@@ -4,6 +4,12 @@ import { formatBottleSizeLabel } from "@/lib/product-naming";
 import { getCurrentStockMl } from "@/lib/inventory";
 import { mlRemainingForRotation, sumSaleMlForRotationsInWindow } from "@/lib/slippage";
 import { prisma } from "@/lib/prisma";
+import {
+  formatDayLabel,
+  formatShiftDateLabel,
+  formatShiftTime,
+  type DayKey,
+} from "@/lib/shift-schedule";
 
 function buildPhysicalState(args: {
   fullInStorage: number;
@@ -41,6 +47,13 @@ export type ShiftReportRow = {
   expectedRemainingInRotation: string;
   posOrdersThisShift: string;
   expectedPhysicalState: string;
+};
+
+export type ShiftReportMetadata = {
+  venueName: string;
+  dayKey: DayKey;
+  windowStart: Date;
+  windowEnd: Date;
 };
 
 export async function buildShiftReportRows(
@@ -113,7 +126,10 @@ function escapeCsvCell(value: string | number): string {
   return s;
 }
 
-export function generateShiftReportCsvBuffer(rows: ShiftReportRow[]): Buffer {
+export function generateShiftReportCsvBuffer(
+  rows: ShiftReportRow[],
+  metadata?: ShiftReportMetadata,
+): Buffer {
   const headers = [
     "SKU Name",
     "Bottle Size",
@@ -123,7 +139,33 @@ export function generateShiftReportCsvBuffer(rows: ShiftReportRow[]): Buffer {
     "POS Orders This Shift",
     "Expected Physical State",
   ];
+
+  const metaLines: string[] = [];
+  if (metadata) {
+    const shiftDate = formatShiftDateLabel(metadata.windowStart, metadata.dayKey);
+    const startLabel = formatShiftTime(
+      `${metadata.windowStart.getHours().toString().padStart(2, "0")}:${metadata.windowStart.getMinutes().toString().padStart(2, "0")}`,
+    );
+    const endLabel = formatShiftTime(
+      `${metadata.windowEnd.getHours().toString().padStart(2, "0")}:${metadata.windowEnd.getMinutes().toString().padStart(2, "0")}`,
+    );
+    metaLines.push(
+      ["Shift Date", shiftDate].map(escapeCsvCell).join(","),
+      ["Shift Start", startLabel].map(escapeCsvCell).join(","),
+      ["Shift End", endLabel].map(escapeCsvCell).join(","),
+      [
+        "Shift Window (ISO)",
+        `${metadata.windowStart.toISOString()} / ${metadata.windowEnd.toISOString()}`,
+      ]
+        .map(escapeCsvCell)
+        .join(","),
+      ["Venue", metadata.venueName].map(escapeCsvCell).join(","),
+      "",
+    );
+  }
+
   const lines = [
+    ...metaLines,
     headers.map(escapeCsvCell).join(","),
     ...rows.map((r) =>
       [

@@ -31,8 +31,10 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
+    const unreadCount = alerts.filter((a) => a.readAt == null).length;
+
     recordApiMetric("GET /api/alerts", 200, Date.now() - startedAt);
-    return Response.json({ ok: true, alerts });
+    return Response.json({ ok: true, alerts, unreadCount });
   } catch (error) {
     recordApiMetric("GET /api/alerts", 500, Date.now() - startedAt);
     return apiError("ALERTS_FETCH_FAILED", "Failed to fetch alerts", 500, {

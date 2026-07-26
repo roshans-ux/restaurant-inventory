@@ -78,6 +78,9 @@ export default function PosSimPage() {
   const [salesPage, setSalesPage] = useState(1);
   const [salesTotal, setSalesTotal] = useState(0);
   const SALES_PAGE_SIZE = 10;
+  const POS_SIM_LIST_VISIBLE_ROWS = 10;
+  const POS_SIM_LIST_MAX_HEIGHT = `calc(2.75rem * ${POS_SIM_LIST_VISIBLE_ROWS + 1})`;
+  const [salesDate, setSalesDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [search, setSearch] = useState("");
   const [saleItemTab, setSaleItemTab] = useState<SaleItemTab>("pours");
   const [itemsLoading, setItemsLoading] = useState(true);
@@ -125,9 +128,9 @@ export default function PosSimPage() {
     }
   }, []);
 
-  const loadRecentSales = useCallback(async (page = 1) => {
+  const loadRecentSales = useCallback(async (page = 1, date = salesDate) => {
     const res = await fetch(
-      `/api/pos-sim/sales?page=${page}&limit=${SALES_PAGE_SIZE}`,
+      `/api/pos-sim/sales?page=${page}&limit=${SALES_PAGE_SIZE}&date=${date}`,
       { cache: "no-store" },
     );
     const data = await res.json();
@@ -135,7 +138,7 @@ export default function PosSimPage() {
     setSaleHistory(data.data?.sales ?? []);
     setSalesTotal(data.data?.total ?? 0);
     setSalesPage(data.data?.page ?? page);
-  }, []);
+  }, [salesDate]);
 
   useEffect(() => {
     let active = true;
@@ -390,10 +393,10 @@ export default function PosSimPage() {
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2 lg:items-stretch">
-        <div className="flex min-h-0 flex-col gap-4">
+      <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+        <div className="flex flex-col gap-4">
           <div
-            className="flex min-h-0 flex-1 flex-col rounded-xl p-5"
+            className="flex max-h-[min(480px,calc(100dvh-12rem))] flex-col rounded-xl p-5"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >
             <h2 className="mb-3 shrink-0 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
@@ -718,9 +721,18 @@ export default function PosSimPage() {
           )}
 
           <RecentSalesTable
-            fillHeight
             sales={saleHistory}
             title="Recent Sales"
+            bodyMaxHeight={POS_SIM_LIST_MAX_HEIGHT}
+            emptyDateFiltered
+            dateFilter={{
+              value: salesDate,
+              onChange: (date) => {
+                setSalesDate(date);
+                setSalesPage(1);
+                void loadRecentSales(1, date);
+              },
+            }}
             pagination={{
               page: salesPage,
               pageSize: SALES_PAGE_SIZE,

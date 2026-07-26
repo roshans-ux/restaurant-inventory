@@ -75,7 +75,7 @@ function PosItemIdCell({
 
   if (editing) {
     return (
-      <div className="min-w-[10rem]">
+      <div className="w-full max-w-full">
         <input
           autoFocus
           value={value}
@@ -114,7 +114,7 @@ function PosItemIdCell({
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="rounded px-1 py-0.5 text-left font-mono text-xs transition-opacity hover:opacity-80"
+      className="rounded px-1 py-0.5 text-left font-mono text-xs whitespace-normal break-all transition-opacity hover:opacity-80"
       style={{
         color: configured ? "var(--text-secondary)" : "var(--text-muted)",
         fontStyle: configured ? "normal" : "italic",
@@ -139,6 +139,7 @@ export default function StraightPoursTab() {
   const [posItemId, setPosItemId] = useState("");
   const [pourMl, setPourMl] = useState(30);
   const [mappingsSearch, setMappingsSearch] = useState("");
+  const [draftSyncWarning, setDraftSyncWarning] = useState("");
   const [sortField, setSortField] = useState<MappingSortField>("timestamp");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [deleteTarget, setDeleteTarget] = useState<Mapping | null>(null);
@@ -166,6 +167,7 @@ export default function StraightPoursTab() {
       setMappings([]);
     } else {
       setMappings(mp.mappings ?? []);
+      setDraftSyncWarning(mp.draftSyncWarning ?? "");
     }
     if (errors.length > 0) {
       setLoadError(errors.join(" · "));
@@ -245,7 +247,7 @@ export default function StraightPoursTab() {
           Number(a.pourMl) - Number(b.pourMl) ||
           a.product.name.localeCompare(b.product.name, undefined, { sensitivity: "base" });
       } else {
-        compare = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+        compare = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
       return sortDirection === "asc" ? compare : -compare;
     });
@@ -374,6 +376,18 @@ export default function StraightPoursTab() {
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
+      {draftSyncWarning && (
+        <div
+          className="lg:col-span-2 rounded-lg px-4 py-3 text-sm"
+          style={{
+            background: "var(--amber-dim, rgba(245,166,35,0.12))",
+            border: "1px solid rgba(245,166,35,0.25)",
+            color: "var(--accent)",
+          }}
+        >
+          Mapping sync warning: {draftSyncWarning}
+        </div>
+      )}
       <form
         onSubmit={onSubmit}
         className="self-start rounded-xl p-6"
@@ -426,7 +440,7 @@ export default function StraightPoursTab() {
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 {formatMappingSaleSize(selectedBottleSizeMl, selectedBottleSizeMl)}{" "}
                 <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  (beer — full bottle only)
+                  (beer — full bottle only; set POS Item ID in the table)
                 </span>
               </p>
             ) : (
@@ -543,12 +557,19 @@ export default function StraightPoursTab() {
             </div>
           ) : (
             <div
-              className="min-h-0 overflow-y-auto"
+              className="min-h-0 overflow-x-hidden overflow-y-auto"
               style={{
                 maxHeight: `calc(${MAPPING_ROW_HEIGHT} * ${MAPPINGS_VISIBLE_ROWS + 1})`,
               }}
             >
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[30%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[12%]" />
+                </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
@@ -571,6 +592,9 @@ export default function StraightPoursTab() {
                 <tbody>
                   {visibleMappings.map((m, i) => {
                     const configured = isPosItemConfigured(m.posItemId);
+                    const bottleSizeMl = Number(m.product.bottleSizeMl);
+                    const isBeerRow =
+                      isBeerBottleSize(bottleSizeMl) && Number(m.pourMl) === bottleSizeMl;
                     return (
                       <tr
                         key={m.id}
@@ -581,49 +605,51 @@ export default function StraightPoursTab() {
                           opacity: configured ? 1 : 0.75,
                         }}
                       >
-                        <td className="px-4 py-3">
+                        <td className="max-w-0 align-top px-4 py-3">
                           <PosItemIdCell mapping={m} onSaved={handleMappingSaved} />
                         </td>
-                        <td className="px-4 py-3 font-medium">
-                          {m.product.name} ({formatBottleSizeLabel(Number(m.product.bottleSizeMl))})
+                        <td className="max-w-0 align-top px-4 py-3 font-medium break-words">
+                          {m.product.name} ({formatBottleSizeLabel(bottleSizeMl)})
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--accent)" }}>
-                          {formatMappingSaleSize(Number(m.pourMl), Number(m.product.bottleSizeMl))}
+                          {formatMappingSaleSize(Number(m.pourMl), bottleSizeMl)}
                         </td>
                         <td className="px-4 py-3 text-right text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
                           <span className="block" style={{ color: "var(--text-secondary)" }}>
-                            {formatActivityDate(m.updatedAt)}
+                            {formatActivityDate(m.createdAt)}
                           </span>
-                          <span className="mt-0.5 block text-[11px]">{formatActivityTime(m.updatedAt)}</span>
+                          <span className="mt-0.5 block text-[11px]">{formatActivityTime(m.createdAt)}</span>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => onEdit(m)}
-                              className="rounded-lg px-3 py-1.5 text-xs font-medium"
-                              style={{
-                                border: "1px solid var(--border)",
-                                color: "var(--text-secondary)",
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setError("");
-                                setDeleteTarget(m);
-                              }}
-                              className="rounded-lg px-3 py-1.5 text-xs font-medium"
-                              style={{
-                                border: "1px solid rgba(224,92,92,0.4)",
-                                color: "var(--red)",
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
+                        <td className="shrink-0 px-4 py-3 text-right">
+                          {!isBeerRow && (
+                            <div className="flex flex-wrap justify-end gap-2 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => onEdit(m)}
+                                className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                                style={{
+                                  border: "1px solid var(--border)",
+                                  color: "var(--text-secondary)",
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setError("");
+                                  setDeleteTarget(m);
+                                }}
+                                className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                                style={{
+                                  border: "1px solid rgba(224,92,92,0.4)",
+                                  color: "var(--red)",
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

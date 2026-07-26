@@ -10,6 +10,7 @@ import TopSellingSkusChart from "@/components/admin/TopSellingSkusChart";
 import { formatBottleStock } from "@/lib/format-bottles";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import { shiftReportFilename } from "@/lib/shift-report-filename";
+import { todayDateParam } from "@/lib/sales-period";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
 
 type Level = {
@@ -76,7 +77,8 @@ export default function Dashboard() {
   const [levelsSortField, setLevelsSortField] = useState<LevelsSortField>("name");
   const [levelsSortDirection, setLevelsSortDirection] = useState<SortDirection>("asc");
   const [shiftBanner, setShiftBanner] = useState<string | null>(null);
-  const [shiftReady, setShiftReady] = useState(false);
+  const [shiftDownloadEnabled, setShiftDownloadEnabled] = useState(false);
+  const [shiftPhase, setShiftPhase] = useState<"none" | "scheduled" | "ready">("none");
   const [showShiftModal, setShowShiftModal] = useState(false);
   const [shiftLoading, setShiftLoading] = useState(false);
   const [shiftError, setShiftError] = useState("");
@@ -86,11 +88,16 @@ export default function Dashboard() {
     const res = await fetch("/api/shift-report/status");
     const data = await readJsonResponse<{
       ok?: boolean;
-      data?: { banner?: string; readyAt?: string | null };
+      data?: {
+        banner?: string | null;
+        phase?: "none" | "scheduled" | "ready";
+        downloadEnabled?: boolean;
+      };
     }>(res);
     if (data.ok && data.data) {
       setShiftBanner(data.data.banner ?? null);
-      setShiftReady(Boolean(data.data.readyAt) || Boolean(data.data.banner?.includes("ready")));
+      setShiftPhase(data.data.phase ?? "none");
+      setShiftDownloadEnabled(Boolean(data.data.downloadEnabled));
     }
   }, []);
 
@@ -99,7 +106,7 @@ export default function Dashboard() {
       const [lvlRes, alrtRes, salesRes, actRes] = await Promise.all([
         fetch("/api/inventory/levels"),
         fetch("/api/alerts"),
-        fetch("/api/pos-sim/sales?limit=5"),
+        fetch(`/api/pos-sim/sales?limit=5&date=${todayDateParam()}`),
         fetch("/api/inventory/activity"),
       ]);
       const [lvl, alrt, sales, act] = await Promise.all([
@@ -123,6 +130,19 @@ export default function Dashboard() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (shiftPhase !== "scheduled") return;
+    const interval = setInterval(() => void loadShiftStatus(), 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadShiftStatus();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [shiftPhase, loadShiftStatus]);
+
   const belowThreshold = levels.filter(
     (l) => l.thresholdBottles !== null && l.currentBottles < l.thresholdBottles,
   );
@@ -141,8 +161,6 @@ export default function Dashboard() {
   const lowAlertByProductId = new Map(
     alerts.filter((a) => a.type === "LOW_STOCK").map((a) => [a.productId, a]),
   );
-  const slippageAlerts = alerts.filter((a) => a.type === "SLIPPAGE");
-
   const sortedLevels = useMemo(() => {
     return [...levels].sort((a, b) => {
       const aLow =
@@ -257,10 +275,11 @@ export default function Dashboard() {
     const res = await fetch("/api/shift-report/download");
     if (!res.ok) return;
     const blob = await res.blob();
+    const windowEnd = res.headers.get("X-Shift-Report-Window-End");
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = shiftReportFilename();
+    a.download = shiftReportFilename(windowEnd ? new Date(windowEnd) : new Date());
     a.click();
     URL.revokeObjectURL(url);
     await loadShiftStatus();
@@ -290,7 +309,7 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {shiftBanner && (
+      {shiftBanner && shiftPhase !== "none" && (
         <div
           className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3"
           style={{ background: "var(--accent-dim)", border: "1px solid rgba(212,175,55,0.3)" }}
@@ -298,17 +317,16 @@ export default function Dashboard() {
           <p className="text-sm" style={{ color: "var(--accent)" }}>
             {shiftBanner}
           </p>
-          {shiftReady && (
-            <button
-              type="button"
-              onClick={downloadShiftReport}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
-              style={{ background: "var(--accent)", color: "#0e0e11" }}
-            >
-              <Download size={13} />
-              Download CSV
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={downloadShiftReport}
+            disabled={!shiftDownloadEnabled}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            style={{ background: "var(--accent)", color: "#0e0e11" }}
+          >
+            <Download size={13} />
+            Download CSV
+          </button>
         </div>
       )}
 
@@ -426,37 +444,6 @@ export default function Dashboard() {
                     </div>
                   );
                 })}
-              </div>
-            </section>
-          )}
-
-          {slippageAlerts.length > 0 && (
-            <section className="mb-8">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-                <AlertTriangle size={14} style={{ color: "var(--red)" }} />
-                Slippage Alerts
-              </h2>
-              <div className="grid gap-2">
-                {slippageAlerts.map((a) => (
-                  <div
-                    key={a.id}
-                    className="rounded-lg px-4 py-3 text-sm"
-                    style={{
-                      background: "var(--red-dim)",
-                      border: "1px solid rgba(224,92,92,0.25)",
-                      color: "var(--red)",
-                    }}
-                  >
-                    <span className="font-medium">{a.product.name}</span>
-                    <span className="mx-2" style={{ color: "var(--text-muted)" }}>
-                      ·
-                    </span>
-                    {a.message}
-                    <span className="mt-0.5 block text-xs" style={{ color: "var(--text-muted)" }}>
-                      {new Date(a.createdAt).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
               </div>
             </section>
           )}

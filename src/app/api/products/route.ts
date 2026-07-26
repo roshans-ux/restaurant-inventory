@@ -12,7 +12,7 @@ import {
   normalizeBottleName,
   skuFromNameAndSize,
 } from "@/lib/product-naming";
-import { ensureDraftMappingsForProduct, recordDeletedMappingSlot, reconcileBeerProductMappings } from "@/lib/pos-draft-mappings";
+import { ensureDraftMappingsForProduct, reconcileBeerProductMappings } from "@/lib/pos-draft-mappings";
 import { isBeerBottleSize } from "@/lib/product-naming";
 
 const productSchema = z.object({
@@ -134,17 +134,20 @@ export async function POST(request: NextRequest) {
       return product;
     });
 
-    await ensureDraftMappingsForProduct(
-      prisma,
-      session.tenantId,
-      result.id,
-      parsed.bottleSizeMl,
-    );
-
     if (isBeerBottleSize(parsed.bottleSizeMl)) {
-      for (const pourMl of [30, 60] as const) {
-        await recordDeletedMappingSlot(prisma, session.tenantId, result.id, pourMl);
-      }
+      await reconcileBeerProductMappings(
+        prisma,
+        session.tenantId,
+        result.id,
+        parsed.bottleSizeMl,
+      );
+    } else {
+      await ensureDraftMappingsForProduct(
+        prisma,
+        session.tenantId,
+        result.id,
+        parsed.bottleSizeMl,
+      );
     }
 
     recordApiMetric("POST /api/products", 201, Date.now() - startedAt);

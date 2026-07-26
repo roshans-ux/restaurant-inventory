@@ -214,10 +214,12 @@ Dark theme tokens in `src/app/globals.css` (`--background`, `--surface`, `--acce
 
 ## In progress
 
-See `.cursor/plans/admin_design_sprint_*.plan.md` for upcoming sprint items.
+See `.cursor/plans/sticky_admin_sidebar_*.plan.md` for any follow-up items.
 
 ### Changelog
 
+- **2026-07-26** — Notifications: Notion-style popover anchored to bell (per-row + mark-all read; no auto-read on open).
+- **2026-06-09** — Sticky admin sidebar; notifications bell + modal (slippage/low-stock); shift schedule start+end; shift report CSV metadata + stale-window fix; POS mappings auto-draft restore + beer POS-ID-only; POS Sim Recent Sales date filter (Today default); handover info banner + beer SKU filter; nav tab subtext.
 - **2026-05-31** — Batch 1 complete locally: beer sizes 330ml/650ml, dashboard slippage alerts, stock orders cancelled tab + row cancel, vendor edit/SKUs in settings, readJsonResponse on admin pages.
 - **2026-05-30** — Initial app context doc. Live: dashboard sorting, horizontal top-SKU chart (ml), alerts nav removed, POS sim tabs, bottle-broken lookup, cocktail mappings, webhook multi-line sales.
 

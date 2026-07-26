@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   Wine,
@@ -13,17 +13,60 @@ import {
   LogOut,
   ArrowRightLeft,
   ClipboardList,
+  Bell,
 } from "lucide-react";
+import NotificationsPopover from "@/components/admin/NotificationsPopover";
 
 const links = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/admin/stock", label: "Stock Entry", icon: PackagePlus },
-  { href: "/admin/handover", label: "Bottle Handover", icon: ArrowRightLeft },
-  { href: "/admin/stock-orders", label: "Stock Orders", icon: ClipboardList },
-  { href: "/admin/products", label: "Bottles", icon: Wine },
-  { href: "/admin/mappings", label: "POS Mappings", icon: GitBranch },
-  { href: "/admin/pos-sim", label: "POS Simulator", icon: Zap },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  {
+    href: "/admin",
+    label: "Dashboard",
+    description: "Live stock overview, sales trends, and shift reports",
+    icon: LayoutDashboard,
+    exact: true,
+  },
+  {
+    href: "/admin/stock",
+    label: "Stock Entry",
+    description: "Receive stock, log broken or returned bottles",
+    icon: PackagePlus,
+  },
+  {
+    href: "/admin/handover",
+    label: "Bottle Handover",
+    description: "Scan bottles as you open them for the shift",
+    icon: ArrowRightLeft,
+  },
+  {
+    href: "/admin/stock-orders",
+    label: "Stock Orders",
+    description: "Reorder when stock is low; place and track vendor orders",
+    icon: ClipboardList,
+  },
+  {
+    href: "/admin/products",
+    label: "Bottles",
+    description: "Add SKUs, bottle sizes, par levels, and vendors",
+    icon: Wine,
+  },
+  {
+    href: "/admin/mappings",
+    label: "POS Mappings",
+    description: "Match POS menu items to pours and cocktail recipes",
+    icon: GitBranch,
+  },
+  {
+    href: "/admin/pos-sim",
+    label: "POS Simulator",
+    description: "Test sales and see inventory deduct in real time",
+    icon: Zap,
+  },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    description: "API keys, shift times, slippage rules, and suppliers",
+    icon: Settings,
+  },
 ];
 
 type MeResponse = {
@@ -40,6 +83,21 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
   const [venueName, setVenueName] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const bellRef = useRef<HTMLButtonElement>(null);
+
+  const fetchUnread = useCallback(async () => {
+    try {
+      const res = await fetch("/api/alerts");
+      const data = await res.json();
+      if (data.ok) {
+        setUnreadCount(data.unreadCount ?? 0);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -53,6 +111,19 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    void fetchUnread();
+    const interval = setInterval(() => void fetchUnread(), 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchUnread();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [fetchUnread]);
+
   async function logout() {
     setLoggingOut(true);
     await fetch("/api/auth/logout", { method: "POST" });
@@ -61,74 +132,122 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
   }
 
   return (
-    <nav
-      style={{ borderRight: "1px solid var(--border)" }}
-      className="flex h-screen w-56 flex-shrink-0 flex-col overflow-y-auto"
-    >
-      <Link
-        href="/"
-        className="block px-5 py-5 transition-opacity hover:opacity-90"
-        style={{ borderBottom: "1px solid var(--border)" }}
-        title="Go to home"
+    <>
+      <nav
+        style={{ borderRight: "1px solid var(--border)" }}
+        className="flex h-full w-56 shrink-0 flex-col overflow-hidden"
       >
-        <div className="flex items-center gap-2">
-          <span className="text-lg" role="img" aria-label="bar">
-            🍶
-          </span>
-          <div className="min-w-0">
-            <span
-              className="block text-sm font-semibold tracking-tight truncate"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {venueName ?? "My Restaurant"}
-            </span>
-            <span className="block text-xs truncate" style={{ color: "var(--text-muted)" }}>
-              Bar Inventory · Go to home
-            </span>
-          </div>
-        </div>
-      </Link>
-
-      <div className="flex flex-col gap-0.5 p-2 flex-1">
-        {links.map(({ href, label, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-all duration-150"
-              style={{
-                color: active ? "var(--accent)" : "var(--text-secondary)",
-                background: active ? "var(--accent-dim)" : "transparent",
-                fontWeight: active ? 500 : 400,
-              }}
-            >
-              <Icon size={15} strokeWidth={active ? 2 : 1.5} />
-              {label}
-            </Link>
-          );
-        })}
-      </div>
-
-      <div className="px-3 pb-4 pt-2 space-y-2" style={{ borderTop: "1px solid var(--border)" }}>
-        {email && (
-          <p className="px-2 text-xs truncate" style={{ color: "var(--text-muted)" }}>
-            {email}
-          </p>
-        )}
-        {!authPaused && (
-          <button
-            type="button"
-            onClick={logout}
-            disabled={loggingOut}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50"
-            style={{ color: "var(--text-secondary)" }}
+        <div
+          className="flex items-start gap-2 px-5 py-5"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <Link
+            href="/"
+            className="flex min-w-0 flex-1 items-center gap-2 transition-opacity hover:opacity-90"
+            title="Go to home"
           >
-            <LogOut size={15} strokeWidth={1.5} />
-            {loggingOut ? "Signing out…" : "Sign out"}
+            <span className="text-lg shrink-0" role="img" aria-label="bar">
+              🍶
+            </span>
+            <div className="min-w-0">
+              <span
+                className="block truncate text-sm font-semibold tracking-tight"
+                style={{ color: "var(--text-primary)" }}
+              >
+                {venueName ?? "My Restaurant"}
+              </span>
+              <span className="block truncate text-xs" style={{ color: "var(--text-muted)" }}>
+                Bar Inventory · Go to home
+              </span>
+            </div>
+          </Link>
+          <button
+            ref={bellRef}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setNotificationsOpen((prev) => !prev);
+            }}
+            className="relative shrink-0 rounded-full p-2 transition-opacity hover:opacity-80"
+            style={{
+              background: "var(--surface-elevated)",
+              border: "1px solid var(--border)",
+              color: "var(--text-secondary)",
+            }}
+            aria-label="Notifications"
+            aria-expanded={notificationsOpen}
+          >
+            <Bell size={16} />
+            {unreadCount > 0 && (
+              <span
+                className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold"
+                style={{ background: "var(--red)", color: "#fff" }}
+              >
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
-        )}
-      </div>
-    </nav>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
+          {links.map(({ href, label, description, icon: Icon, exact }) => {
+            const active = exact ? pathname === href : pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className="flex items-start gap-3 rounded-md px-3 py-2.5 transition-all duration-150"
+                style={{
+                  color: active ? "var(--accent)" : "var(--text-secondary)",
+                  background: active ? "var(--accent-dim)" : "transparent",
+                  fontWeight: active ? 500 : 400,
+                }}
+              >
+                <Icon size={15} strokeWidth={active ? 2 : 1.5} className="mt-0.5 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block text-sm leading-tight">{label}</span>
+                  <span
+                    className="mt-0.5 block text-xs leading-snug"
+                    style={{ color: active ? "var(--text-secondary)" : "var(--text-muted)" }}
+                  >
+                    {description}
+                  </span>
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="shrink-0 space-y-2 px-3 pb-4 pt-2" style={{ borderTop: "1px solid var(--border)" }}>
+          {email && (
+            <p className="truncate px-2 text-xs" style={{ color: "var(--text-muted)" }}>
+              {email}
+            </p>
+          )}
+          {!authPaused && (
+            <button
+              type="button"
+              onClick={logout}
+              disabled={loggingOut}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors disabled:opacity-50"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              <LogOut size={15} strokeWidth={1.5} />
+              {loggingOut ? "Signing out…" : "Sign out"}
+            </button>
+          )}
+        </div>
+      </nav>
+
+      <NotificationsPopover
+        open={notificationsOpen}
+        onClose={() => {
+          setNotificationsOpen(false);
+          void fetchUnread();
+        }}
+        onUnreadChange={() => void fetchUnread()}
+        anchorRef={bellRef}
+      />
+    </>
   );
 }

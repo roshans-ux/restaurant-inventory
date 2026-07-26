@@ -3,7 +3,27 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
-import { parseShiftSchedule } from "@/lib/shift-schedule";
+import { DAY_KEYS, parseShiftSchedule } from "@/lib/shift-schedule";
+
+const timeSchema = z.union([
+  z.string().regex(/^\d{2}:\d{2}$/),
+  z.null(),
+]);
+
+const dayShiftSchema = z
+  .object({
+    start: timeSchema,
+    end: timeSchema,
+  })
+  .nullable()
+  .optional();
+
+const patchSchema = z.object({
+  slippageTolerancePercent: z.number().int().min(1).max(100).optional(),
+  shiftSchedule: z
+    .record(z.string(), dayShiftSchema)
+    .optional(),
+});
 
 export async function GET(request: NextRequest) {
   const session = await requireApiSession(request);
@@ -21,6 +41,7 @@ export async function GET(request: NextRequest) {
         shiftReportScheduledAt: true,
         shiftReportReadyAt: true,
         shiftReportWindowStartAt: true,
+        shiftReportWindowEndAt: true,
         apiKey: true,
         posWebhookSecret: true,
       },
@@ -39,19 +60,36 @@ export async function GET(request: NextRequest) {
   }
 }
 
-const patchSchema = z.object({
-  slippageTolerancePercent: z.number().int().min(1).max(100).optional(),
-  shiftSchedule: z
-    .record(z.string(), z.union([z.string().regex(/^\d{2}:\d{2}$/), z.null()]))
-    .optional(),
-});
-
 export async function PATCH(request: NextRequest) {
   const session = await requireApiSession(request);
   if (!isSession(session)) return session;
 
   try {
     const payload = patchSchema.parse(await request.json());
+
+    if (payload.shiftSchedule) {
+      for (const key of DAY_KEYS) {
+        const day = payload.shiftSchedule[key];
+        if (!day) continue;
+        const hasStart = Boolean(day.start);
+        const hasEnd = Boolean(day.end);
+        if (hasStart !== hasEnd) {
+          return apiError(
+            "INVALID_SHIFT_SCHEDULE",
+            `${key}: both start and end are required when setting shift times`,
+            400,
+          );
+        }
+        if (hasStart && hasEnd && day.start === day.end) {
+          return apiError(
+            "INVALID_SHIFT_SCHEDULE",
+            `${key}: start and end cannot be the same`,
+            400,
+          );
+        }
+      }
+    }
+
     const updated = await prisma.tenant.update({
       where: { id: session.tenantId },
       data: {

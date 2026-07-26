@@ -12,6 +12,7 @@ import {
   syncDraftMappingsForTenant,
 } from "@/lib/pos-draft-mappings";
 import { excludeDraftSuppressionMappings } from "@/lib/pos-mapping-utils";
+import { isBeerBottleSize } from "@/lib/product-naming";
 import {
   findPosItemConflict,
   posItemConflictMessage,
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     const mappingsBeforeSync = await prisma.posMenuMapping.findMany({
       where: { tenantId: session.tenantId, ...excludeDraftSuppressionMappings() },
       include: { product: true },
-      orderBy: [{ product: { name: "asc" } }, { pourMl: "asc" }],
+      orderBy: { createdAt: "desc" },
     });
 
     try {
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
       : await prisma.posMenuMapping.findMany({
           where: { tenantId: session.tenantId, ...excludeDraftSuppressionMappings() },
           include: { product: true },
-          orderBy: [{ product: { name: "asc" } }, { pourMl: "asc" }],
+          orderBy: { createdAt: "desc" },
         });
 
     recordApiMetric("GET /api/pos-mappings", 200, Date.now() - startedAt);
@@ -87,6 +88,27 @@ export async function POST(request: NextRequest) {
     const product = await findProductForTenant(session.tenantId, parsed.productId);
     if (!product) {
       return apiError("PRODUCT_NOT_FOUND", "Product not found", 404);
+    }
+
+    const bottleSizeMl = Number(product.bottleSizeMl);
+    if (isBeerBottleSize(bottleSizeMl)) {
+      if (parsed.pourMl !== bottleSizeMl) {
+        return apiError(
+          "BEER_MAPPING_INVALID",
+          "Beer bottles only support full-bottle mapping at the bottle size",
+          400,
+        );
+      }
+      const existingBeer = await prisma.posMenuMapping.findFirst({
+        where: { tenantId: session.tenantId, productId: parsed.productId },
+      });
+      if (existingBeer) {
+        return apiError(
+          "BEER_MAPPING_EXISTS",
+          "Beer mapping already exists — update POS Item ID in the table",
+          409,
+        );
+      }
     }
 
     const posItemConflict = await findPosItemConflict(session.tenantId, parsed.posItemId);
@@ -143,10 +165,15 @@ export async function PATCH(request: NextRequest) {
 
     const existing = await prisma.posMenuMapping.findFirst({
       where: { id: parsed.id, tenantId: session.tenantId },
+      include: { product: true },
     });
     if (!existing) {
       return apiError("POS_MAPPING_NOT_FOUND", "Mapping not found", 404);
     }
+
+    const bottleSizeMl = Number(existing.product.bottleSizeMl);
+    const isBeerFull =
+      isBeerBottleSize(bottleSizeMl) && Number(existing.pourMl) === bottleSizeMl;
 
     const nextPosItemId = parsed.posItemId !== undefined ? parsed.posItemId : existing.posItemId;
 
@@ -164,7 +191,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    if (parsed.productId) {
+    if (!isBeerFull && parsed.productId) {
       const product = await findProductForTenant(session.tenantId, parsed.productId);
       if (!product) {
         return apiError("PRODUCT_NOT_FOUND", "Product not found", 404);
@@ -175,8 +202,8 @@ export async function PATCH(request: NextRequest) {
       where: { id: parsed.id },
       data: {
         ...(parsed.posItemId !== undefined ? { posItemId: parsed.posItemId } : {}),
-        ...(parsed.productId ? { productId: parsed.productId } : {}),
-        ...(parsed.pourMl ? { pourMl: parsed.pourMl } : {}),
+        ...(!isBeerFull && parsed.productId ? { productId: parsed.productId } : {}),
+        ...(!isBeerFull && parsed.pourMl ? { pourMl: parsed.pourMl } : {}),
       },
       include: { product: true },
     });

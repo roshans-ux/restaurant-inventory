@@ -2,7 +2,13 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Copy, Check, Plus, Trash2, Pencil } from "lucide-react";
-import { DAY_KEYS, formatDayLabel, type DayKey, type ShiftSchedule } from "@/lib/shift-schedule";
+import {
+  DAY_KEYS,
+  formatDayLabel,
+  getPreviousDayShiftEnd,
+  type DayKey,
+  type DayShift,
+} from "@/lib/shift-schedule";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 
 type TenantInfo = {
@@ -11,7 +17,7 @@ type TenantInfo = {
   apiKey: string;
   posWebhookSecret: string | null;
   slippageTolerancePercent: number;
-  shiftSchedule: ShiftSchedule;
+  shiftSchedule: Record<DayKey, DayShift | null>;
 };
 
 type Vendor = {
@@ -66,7 +72,7 @@ export default function SettingsPage() {
   const [origin, setOrigin] = useState("");
   const [loading, setLoading] = useState(true);
   const [slippage, setSlippage] = useState("10");
-  const [schedule, setSchedule] = useState<ShiftSchedule>({});
+  const [schedule, setSchedule] = useState<Record<DayKey, DayShift | null>>({} as Record<DayKey, DayShift | null>);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState("");
   const [vendorName, setVendorName] = useState("");
@@ -268,32 +274,69 @@ export default function SettingsPage() {
 
             <p className="text-sm font-medium pt-2">Shift Schedule</p>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              End-of-shift time for each day (24h HH:MM). Leave empty for closed days.
+              Shift start and end for each day (24h). Leave both empty for closed days. Overnight shifts (end before start on the clock) are supported.
             </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {DAY_KEYS.map((key: DayKey) => (
-                <label key={key} className="flex items-center justify-between gap-2">
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {formatDayLabel(key)}
-                  </span>
-                  <input
-                    type="time"
-                    value={schedule[key] ?? ""}
-                    onChange={(e) =>
-                      setSchedule((prev) => ({
-                        ...prev,
-                        [key]: e.target.value || null,
-                      }))
-                    }
-                    className="rounded-lg px-2 py-1.5 text-sm outline-none"
-                    style={{
-                      background: "var(--surface-elevated)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text-primary)",
-                    }}
-                  />
-                </label>
-              ))}
+            <div className="grid gap-4">
+              {DAY_KEYS.map((key: DayKey) => {
+                const day = schedule[key];
+                const prefilledStart = day?.start ?? getPreviousDayShiftEnd(schedule, new Date()) ?? "";
+                return (
+                  <div
+                    key={key}
+                    className="grid gap-2 rounded-lg p-3 sm:grid-cols-[7rem_1fr_1fr]"
+                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border-subtle)" }}
+                  >
+                    <span className="text-xs font-medium self-center" style={{ color: "var(--text-muted)" }}>
+                      {formatDayLabel(key)}
+                    </span>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Start</span>
+                      <input
+                        type="time"
+                        value={day?.start ?? ""}
+                        placeholder={prefilledStart || undefined}
+                        onChange={(e) =>
+                          setSchedule((prev) => ({
+                            ...prev,
+                            [key]: {
+                              start: e.target.value || null,
+                              end: prev[key]?.end ?? null,
+                            },
+                          }))
+                        }
+                        className="rounded-lg px-2 py-1.5 text-sm outline-none"
+                        style={{
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text-primary)",
+                        }}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>End</span>
+                      <input
+                        type="time"
+                        value={day?.end ?? ""}
+                        onChange={(e) =>
+                          setSchedule((prev) => ({
+                            ...prev,
+                            [key]: {
+                              start: prev[key]?.start ?? null,
+                              end: e.target.value || null,
+                            },
+                          }))
+                        }
+                        className="rounded-lg px-2 py-1.5 text-sm outline-none"
+                        style={{
+                          background: "var(--surface)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text-primary)",
+                        }}
+                      />
+                    </label>
+                  </div>
+                );
+              })}
             </div>
 
             {settingsMsg && (

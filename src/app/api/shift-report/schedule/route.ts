@@ -4,11 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import {
-  getPreviousShiftEnd,
+  getShiftWindowForReport,
   getTodayShiftEndDate,
   parseShiftSchedule,
+  todayDayKey,
 } from "@/lib/shift-schedule";
-import { buildShiftReportRows, generateShiftReportCsvBuffer } from "@/lib/shift-report";
+import {
+  buildShiftReportRows,
+  generateShiftReportCsvBuffer,
+  type ShiftReportMetadata,
+} from "@/lib/shift-report";
 import { shiftReportFilename } from "@/lib/shift-report-filename";
 
 const postSchema = z.object({
@@ -24,7 +29,7 @@ export async function POST(request: NextRequest) {
     const payload = postSchema.parse(await request.json());
     const tenant = await prisma.tenant.findUnique({
       where: { id: session.tenantId },
-      select: { shiftSchedule: true },
+      select: { shiftSchedule: true, name: true },
     });
     if (!tenant) {
       return apiError("TENANT_NOT_FOUND", "Venue not found", 404);
@@ -32,6 +37,7 @@ export async function POST(request: NextRequest) {
 
     const schedule = parseShiftSchedule(tenant.shiftSchedule);
     const now = new Date();
+    const shiftWindow = getShiftWindowForReport(schedule, now);
 
     if (payload.mode === "schedule") {
       const shiftEnd = getTodayShiftEndDate(schedule, now);
@@ -42,18 +48,20 @@ export async function POST(request: NextRequest) {
           400,
         );
       }
-      const windowStart = getPreviousShiftEnd(schedule, now) ?? new Date(now.getTime() - 8 * 60 * 60 * 1000);
+      const windowStart = shiftWindow?.windowStart ?? new Date(shiftEnd.getTime() - 8 * 60 * 60 * 1000);
       await prisma.tenant.update({
         where: { id: session.tenantId },
         data: {
           shiftReportScheduledAt: shiftEnd,
           shiftReportReadyAt: null,
           shiftReportWindowStartAt: windowStart,
+          shiftReportWindowEndAt: shiftEnd,
         },
       });
       return apiOk({
         scheduledAt: shiftEnd.toISOString(),
         windowStart: windowStart.toISOString(),
+        windowEnd: shiftEnd.toISOString(),
       });
     }
 
@@ -68,9 +76,18 @@ export async function POST(request: NextRequest) {
     }
 
     const windowStart =
-      getPreviousShiftEnd(schedule, now) ?? new Date(now.getTime() - 8 * 60 * 60 * 1000);
-    const rows = await buildShiftReportRows(session.tenantId, windowStart, now);
-    const buffer = generateShiftReportCsvBuffer(rows);
+      shiftWindow?.windowStart ?? new Date(now.getTime() - 8 * 60 * 60 * 1000);
+    const windowEnd = now;
+    const dayKey = shiftWindow?.dayKey ?? todayDayKey(now);
+
+    const rows = await buildShiftReportRows(session.tenantId, windowStart, windowEnd);
+    const metadata: ShiftReportMetadata = {
+      venueName: tenant.name,
+      dayKey,
+      windowStart,
+      windowEnd,
+    };
+    const buffer = generateShiftReportCsvBuffer(rows, metadata);
 
     await prisma.tenant.update({
       where: { id: session.tenantId },
@@ -78,6 +95,7 @@ export async function POST(request: NextRequest) {
         shiftReportReadyAt: now,
         shiftReportScheduledAt: null,
         shiftReportWindowStartAt: windowStart,
+        shiftReportWindowEndAt: windowEnd,
       },
     });
 
@@ -85,7 +103,7 @@ export async function POST(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${shiftReportFilename(now)}"`,
+        "Content-Disposition": `attachment; filename="${shiftReportFilename(windowEnd)}"`,
       },
     });
   } catch (error) {

@@ -11,6 +11,7 @@ import {
   formatSaleSize,
   formatSaleTime,
 } from "@/lib/pos-sales-format";
+import { isTodayDateParam } from "@/lib/sales-period";
 
 export type RecentSaleRow = {
   id: string;
@@ -41,6 +42,10 @@ type RecentSalesTableProps = {
   title?: string;
   /** Fill parent flex height; table body scrolls vertically only */
   fillHeight?: boolean;
+  /** Max height for scrollable table body (e.g. calc(2.75rem * 11)) */
+  bodyMaxHeight?: string;
+  dateFilter?: { value: string; onChange: (date: string) => void };
+  emptyDateFiltered?: boolean;
   sortable?: boolean;
 };
 
@@ -151,6 +156,9 @@ export default function RecentSalesTable({
   viewAllLabel = "View all orders",
   title = "Latest Orders",
   fillHeight = false,
+  bodyMaxHeight,
+  dateFilter,
+  emptyDateFiltered = false,
   sortable = false,
 }: RecentSalesTableProps) {
   const [sortField, setSortField] = useState<SaleSortField>("dateTime");
@@ -272,7 +280,7 @@ export default function RecentSalesTable({
   const tableBody =
     visibleSales.length === 0 ? (
       <div className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>
-        No sales yet
+        {emptyDateFiltered ? "No sales on this date" : "No sales yet"}
       </div>
     ) : (
       <table className="w-full table-fixed text-sm">
@@ -345,14 +353,17 @@ export default function RecentSalesTable({
       className={
         fillHeight
           ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl"
-          : "overflow-hidden rounded-xl"
+          : "flex flex-col overflow-hidden rounded-xl"
       }
       style={{ border: "1px solid var(--border)" }}
     >
       <div
         className={
-          fillHeight ? "min-h-0 flex-1 overflow-x-hidden overflow-y-auto" : "overflow-x-hidden"
+          fillHeight || bodyMaxHeight
+            ? "min-h-0 overflow-x-hidden overflow-y-auto"
+            : "overflow-x-hidden"
         }
+        style={bodyMaxHeight ? { maxHeight: bodyMaxHeight } : fillHeight ? { flex: 1 } : undefined}
       >
         {tableBody}
       </div>
@@ -362,10 +373,30 @@ export default function RecentSalesTable({
 
   return (
     <div className={fillHeight ? "flex min-h-0 flex-1 flex-col" : undefined}>
-      <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+      <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
           {title}
         </h2>
+        {dateFilter && (
+          <div className="flex items-center gap-2">
+            {isTodayDateParam(dateFilter.value) && (
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Today
+              </span>
+            )}
+            <input
+              type="date"
+              value={dateFilter.value}
+              onChange={(e) => dateFilter.onChange(e.target.value)}
+              className="rounded-lg px-2 py-1.5 text-xs outline-none"
+              style={{
+                background: "var(--surface-elevated)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            />
+          </div>
+        )}
         {viewAllHref && (
           <Link href={viewAllHref} className="text-xs whitespace-nowrap" style={{ color: "var(--accent)" }}>
             {viewAllLabel} →
