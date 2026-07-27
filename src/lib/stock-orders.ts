@@ -2,22 +2,44 @@ import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStockMl, isBelowThreshold } from "@/lib/inventory";
 
+export type PendingStockOrderContext = {
+  currentMl: number;
+  thresholdBottles: number;
+  bottleSizeMl: number;
+  reorderQuantity: number;
+  vendorId: string | null;
+};
+
 export async function maybeCreatePendingStockOrder(
   productId: string,
   tenantId: string,
+  known?: PendingStockOrderContext,
 ): Promise<void> {
-  const config = await prisma.reorderConfig.findUnique({
-    where: { productId },
-    include: { product: true },
-  });
-  if (!config) return;
+  let currentMl = known?.currentMl;
+  let thresholdBottles = known?.thresholdBottles;
+  let bottleSizeMl = known?.bottleSizeMl;
+  let reorderQuantity = known?.reorderQuantity;
+  let vendorId = known?.vendorId ?? null;
 
-  const product = config.product;
-  if (product.tenantId !== tenantId) return;
+  if (
+    currentMl === undefined ||
+    thresholdBottles === undefined ||
+    bottleSizeMl === undefined ||
+    reorderQuantity === undefined
+  ) {
+    const config = await prisma.reorderConfig.findUnique({
+      where: { productId },
+      include: { product: true },
+    });
+    if (!config) return;
+    if (config.product.tenantId !== tenantId) return;
 
-  const bottleSizeMl = Number(product.bottleSizeMl);
-  const thresholdBottles = Number(config.thresholdBottles);
-  const currentMl = await getCurrentStockMl(productId);
+    bottleSizeMl = Number(config.product.bottleSizeMl);
+    thresholdBottles = Number(config.thresholdBottles);
+    reorderQuantity = config.reorderQuantity;
+    vendorId = config.product.vendorId;
+    currentMl = await getCurrentStockMl(productId);
+  }
 
   if (!isBelowThreshold(currentMl, thresholdBottles, bottleSizeMl)) return;
 
@@ -34,8 +56,8 @@ export async function maybeCreatePendingStockOrder(
     data: {
       tenantId,
       productId,
-      vendorId: product.vendorId,
-      quantityBottles: config.reorderQuantity,
+      vendorId,
+      quantityBottles: reorderQuantity,
       status: StockOrderStatus.PENDING,
     },
   });

@@ -53,10 +53,13 @@ async function resolveOpenLowStockAlerts(productId: string): Promise<void> {
 
 /** Reconcile open alerts with current stock and threshold; create alert only when strictly below threshold. */
 export async function syncLowStockAlerts(productId: string): Promise<void> {
-  const config = await prisma.reorderConfig.findUnique({
-    where: { productId },
-    include: { product: true },
-  });
+  const [config, currentMl] = await Promise.all([
+    prisma.reorderConfig.findUnique({
+      where: { productId },
+      include: { product: true },
+    }),
+    getCurrentStockMl(productId),
+  ]);
 
   if (!config) {
     await resolveOpenLowStockAlerts(productId);
@@ -65,7 +68,6 @@ export async function syncLowStockAlerts(productId: string): Promise<void> {
 
   const bottleSizeMl = Number(config.product.bottleSizeMl);
   const thresholdBottles = Number(config.thresholdBottles);
-  const currentMl = await getCurrentStockMl(productId);
 
   if (!isBelowThreshold(currentMl, thresholdBottles, bottleSizeMl)) {
     await resolveOpenLowStockAlerts(productId);
@@ -76,17 +78,16 @@ export async function syncLowStockAlerts(productId: string): Promise<void> {
 
   const cooldownMinutes = Number(process.env.ALERT_COOLDOWN_MINUTES ?? 120);
   const cooldownSince = new Date(Date.now() - cooldownMinutes * 60 * 1000);
-  const recentAlert = await prisma.alert.findFirst({
-    where: { productId, type: AlertType.LOW_STOCK, createdAt: { gte: cooldownSince } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (recentAlert) return;
-
-  const openAlert = await prisma.alert.findFirst({
-    where: { productId, type: AlertType.LOW_STOCK, resolvedAt: null },
-  });
-
-  if (openAlert) return;
+  const [recentAlert, openAlert] = await Promise.all([
+    prisma.alert.findFirst({
+      where: { productId, type: AlertType.LOW_STOCK, createdAt: { gte: cooldownSince } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.alert.findFirst({
+      where: { productId, type: AlertType.LOW_STOCK, resolvedAt: null },
+    }),
+  ]);
+  if (recentAlert || openAlert) return;
 
   const stockLabel = formatBottleStock(currentMl, bottleSizeMl);
   await prisma.alert.create({
@@ -97,7 +98,13 @@ export async function syncLowStockAlerts(productId: string): Promise<void> {
     },
   });
 
-  await maybeCreatePendingStockOrder(productId, config.product.tenantId);
+  await maybeCreatePendingStockOrder(productId, config.product.tenantId, {
+    currentMl,
+    thresholdBottles,
+    bottleSizeMl,
+    reorderQuantity: config.reorderQuantity,
+    vendorId: config.product.vendorId,
+  });
 }
 
 /** @deprecated Use syncLowStockAlerts */

@@ -151,6 +151,23 @@ export default function StockOrdersPage() {
     if (!Number.isFinite(qty) || qty <= 0) return;
     setActing(true);
     setError("");
+    const previous = orders;
+    setEditQty((prev) => {
+      const next = { ...prev };
+      delete next[orderId];
+      return next;
+    });
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              quantityBottles: qty,
+              status: qty !== o.quantityBottles ? "MODIFIED" : o.status,
+            }
+          : o,
+      ),
+    );
     try {
       const res = await fetch(`/api/stock-orders/${orderId}`, {
         method: "PATCH",
@@ -163,28 +180,12 @@ export default function StockOrdersPage() {
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Update failed"));
-      setEditQty((prev) => {
-        const next = { ...prev };
-        delete next[orderId];
-        return next;
-      });
       const updated = data.data?.order;
       if (updated) {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)));
-      } else {
-        setOrders((prev) =>
-          prev.map((o) =>
-            o.id === orderId
-              ? {
-                  ...o,
-                  quantityBottles: qty,
-                  status: qty !== o.quantityBottles ? "MODIFIED" : o.status,
-                }
-              : o,
-          ),
-        );
       }
     } catch (err) {
+      setOrders(previous);
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
       setActing(false);
@@ -278,6 +279,14 @@ export default function StockOrdersPage() {
     setActing(true);
     setError("");
     const ids = [...selected];
+    const previous = orders;
+    const nowIso = new Date().toISOString();
+    setOrders((prev) =>
+      prev.map((o) =>
+        ids.includes(o.id) ? { ...o, status: "CANCELLED", cancelledAt: nowIso } : o,
+      ),
+    );
+    setSelected(new Set());
     try {
       const res = await fetch("/api/stock-orders", {
         method: "POST",
@@ -291,14 +300,9 @@ export default function StockOrdersPage() {
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Cancel failed"));
       if (data.data?.files?.length) downloadVendorFiles(data.data.files);
-      const nowIso = new Date().toISOString();
-      setOrders((prev) =>
-        prev.map((o) =>
-          ids.includes(o.id) ? { ...o, status: "CANCELLED", cancelledAt: nowIso } : o,
-        ),
-      );
-      setSelected(new Set());
     } catch (err) {
+      setOrders(previous);
+      setSelected(new Set(ids));
       setError(err instanceof Error ? err.message : "Cancel failed");
     } finally {
       setActing(false);

@@ -287,9 +287,20 @@ export default function StockPage() {
     setError("");
     setLastResult(null);
 
+    const productName = selectedProduct?.name ?? "bottle";
+    const previousLevels = levels;
+    const previousActivity = activity;
+    let appliedOptimistic = false;
+
     try {
+      let optimisticDelta = 0;
+      let optimisticType = "RECEIVE";
+      let optimisticReason: string | null = "Stock received";
+      let request: Promise<Response>;
+
       if (mode === "receive") {
-        const res = await fetch("/api/inventory/receive", {
+        optimisticDelta = Math.round(receiveQty * bottleSizeMl);
+        request = fetch("/api/inventory/receive", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -297,61 +308,165 @@ export default function StockPage() {
             quantityBottles: receiveQty,
           }),
         });
-        const payload = await res.json();
-        if (!res.ok || payload.ok === false) {
-          throw new Error(payload.error?.message ?? "Receive failed");
-        }
-        const ml = payload.data?.movement?.quantityDeltaMl;
-        setLastResult(
-          `Received ${selectedProduct?.name ?? "bottle"}: +${ml ?? receiveQty * bottleSizeMl}ml`,
-        );
       } else {
         let body: Record<string, unknown>;
         switch (adjustType) {
           case "BOTTLE_BROKEN":
             body = { productId, adjustmentType: "BOTTLE_BROKEN", remainingMl };
+            optimisticDelta = -remainingMl;
+            optimisticReason = "Bottle broken";
             break;
           case "SEND_BACK_TO_SELLER":
             if (bottlesToReturn < 1) {
               throw new Error("Select at least 1 bottle to send back");
             }
             body = { productId, adjustmentType: "SEND_BACK_TO_SELLER", bottlesToReturn };
+            optimisticDelta = -(bottlesToReturn * bottleSizeMl);
+            optimisticReason = "Send back to seller";
             break;
           case "UNDERPOUR":
             body = { productId, adjustmentType: "UNDERPOUR", variancePours };
+            optimisticDelta = variancePours * POUR_ML;
+            optimisticReason = "Underpour correction";
             break;
           case "OVERPOUR":
             body = { productId, adjustmentType: "OVERPOUR", variancePours };
+            optimisticDelta = -(variancePours * POUR_ML);
+            optimisticReason = "Overpour correction";
             break;
         }
-
-        const res = await fetch("/api/inventory/adjust", {
+        optimisticType = "ADJUSTMENT";
+        request = fetch("/api/inventory/adjust", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify(body!),
         });
-        const raw = await res.text();
-        let payload: { ok?: boolean; error?: { message?: string }; data?: { movement?: { quantityDeltaMl?: number } } };
-        try {
-          payload = raw ? JSON.parse(raw) : {};
-        } catch {
-          throw new Error(
-            raw.trim().startsWith("<!DOCTYPE")
-              ? `Server error (${res.status})`
-              : "Invalid response from server",
+      }
+
+      const tempId = `optimistic-${Date.now()}`;
+      const nextMl = currentMl + optimisticDelta;
+
+      setLevels((prev) => {
+        const existing = prev.find((l) => l.productId === productId);
+        if (existing) {
+          return prev.map((l) =>
+            l.productId === productId
+              ? {
+                  ...l,
+                  currentMl: nextMl,
+                  currentBottles: nextMl / l.bottleSizeMl,
+                }
+              : l,
           );
         }
-        if (!res.ok || payload.ok === false) {
-          throw new Error(payload.error?.message ?? "Adjustment failed");
-        }
-        const ml = payload.data?.movement?.quantityDeltaMl;
-        const delta = typeof ml === "number" ? `${ml >= 0 ? "+" : ""}${ml}ml` : "updated";
-        setLastResult(`${selectedProduct?.name ?? "Bottle"}: ${delta}`);
+        return [
+          ...prev,
+          {
+            productId,
+            name: productName,
+            currentMl: nextMl,
+            currentBottles: nextMl / bottleSizeMl,
+            bottleSizeMl,
+            thresholdBottles: null,
+          },
+        ];
+      });
+      setActivity((prev) => [
+        {
+          id: tempId,
+          type: optimisticType,
+          quantityDeltaMl: optimisticDelta,
+          reason: optimisticReason,
+          createdAt: new Date().toISOString(),
+          product: { name: productName },
+        },
+        ...prev,
+      ]);
+      setLastResult(
+        mode === "receive"
+          ? `Received ${productName}: +${optimisticDelta}ml`
+          : `${productName}: ${optimisticDelta >= 0 ? "+" : ""}${optimisticDelta}ml`,
+      );
+      appliedOptimistic = true;
+      setSaving(false);
+
+      const res = await request;
+      const raw = await res.text();
+      let payload: {
+        ok?: boolean;
+        error?: { message?: string };
+        data?: {
+          movement?: {
+            id?: string;
+            quantityDeltaMl?: number;
+            reason?: string | null;
+            type?: string;
+            createdAt?: string;
+          };
+        };
+      };
+      try {
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(
+          raw.trim().startsWith("<!DOCTYPE")
+            ? `Server error (${res.status})`
+            : "Invalid response from server",
+        );
       }
-      await refreshStock();
+      if (!res.ok || payload.ok === false) {
+        throw new Error(
+          payload.error?.message ?? (mode === "receive" ? "Receive failed" : "Adjustment failed"),
+        );
+      }
+
+      const movement = payload.data?.movement;
+      if (movement?.id) {
+        const serverDelta =
+          typeof movement.quantityDeltaMl === "number"
+            ? movement.quantityDeltaMl
+            : optimisticDelta;
+        setActivity((prev) =>
+          prev.map((row) =>
+            row.id === tempId
+              ? {
+                  id: movement.id!,
+                  type: movement.type ?? optimisticType,
+                  quantityDeltaMl: serverDelta,
+                  reason: movement.reason ?? optimisticReason,
+                  createdAt: movement.createdAt ?? row.createdAt,
+                  product: { name: productName },
+                }
+              : row,
+          ),
+        );
+        if (serverDelta !== optimisticDelta) {
+          const correctedMl = currentMl + serverDelta;
+          setLevels((prev) =>
+            prev.map((l) =>
+              l.productId === productId
+                ? {
+                    ...l,
+                    currentMl: correctedMl,
+                    currentBottles: correctedMl / l.bottleSizeMl,
+                  }
+                : l,
+            ),
+          );
+          setLastResult(
+            mode === "receive"
+              ? `Received ${productName}: +${serverDelta}ml`
+              : `${productName}: ${serverDelta >= 0 ? "+" : ""}${serverDelta}ml`,
+          );
+        }
+      }
     } catch (err) {
+      if (appliedOptimistic) {
+        setLevels(previousLevels);
+        setActivity(previousActivity);
+        setLastResult(null);
+      }
       setError(err instanceof Error ? err.message : "Request failed");
-    } finally {
       setSaving(false);
     }
   }

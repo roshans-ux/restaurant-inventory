@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { QuantityUnit } from "@prisma/client";
+import { afterResponse } from "@/lib/after-response";
 import { evaluateLowStock, isWithinReplayWindow, verifyWebhookSignature } from "@/lib/inventory";
 import { apiError, apiOk } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
@@ -186,16 +187,19 @@ export async function POST(request: NextRequest) {
       distinct: ["productId"],
     });
 
-    await Promise.all(
-      lines.map(async (line) => {
-        try {
-          await evaluateLowStock(line.productId);
-        } catch (alertError) {
-          console.error("Low-stock alert sync failed after sale:", alertError);
-        }
-      }),
-    );
     revalidateTag("inventory-levels", { expire: 0 });
+    const productIds = lines.map((line) => line.productId);
+    afterResponse(async () => {
+      await Promise.all(
+        productIds.map(async (productId) => {
+          try {
+            await evaluateLowStock(productId);
+          } catch (alertError) {
+            console.error("Low-stock alert sync failed after sale:", alertError);
+          }
+        }),
+      );
+    }, "pos-sale low-stock");
     const response = apiOk({ saleId: result.id, accepted: true });
     recordApiMetric("POST /api/webhooks/pos/sale", 200, Date.now() - startedAt);
     return response;

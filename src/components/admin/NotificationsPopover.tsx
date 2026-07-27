@@ -212,14 +212,19 @@ export default function NotificationsPopover({
   }
 
   async function handleMarkOne(id: string) {
+    const previous = alerts;
+    const now = new Date().toISOString();
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, readAt: now } : a)));
+    onUnreadChange();
     setMarkingId(id);
     try {
       const ok = await markRead([id]);
-      if (!ok) return;
-      const now = new Date().toISOString();
-      setAlerts((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, readAt: now } : a)),
-      );
+      if (!ok) {
+        setAlerts(previous);
+        onUnreadChange();
+      }
+    } catch {
+      setAlerts(previous);
       onUnreadChange();
     } finally {
       setMarkingId(null);
@@ -228,12 +233,19 @@ export default function NotificationsPopover({
 
   async function handleMarkAll() {
     if (unreadCount === 0) return;
+    const previous = alerts;
+    const now = new Date().toISOString();
+    setAlerts((prev) => prev.map((a) => ({ ...a, readAt: a.readAt ?? now })));
+    onUnreadChange();
     setMarkingAll(true);
     try {
       const ok = await markRead();
-      if (!ok) return;
-      const now = new Date().toISOString();
-      setAlerts((prev) => prev.map((a) => ({ ...a, readAt: a.readAt ?? now })));
+      if (!ok) {
+        setAlerts(previous);
+        onUnreadChange();
+      }
+    } catch {
+      setAlerts(previous);
       onUnreadChange();
     } finally {
       setMarkingAll(false);

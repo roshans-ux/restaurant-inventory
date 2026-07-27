@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { QuantityUnit, StockMovementType } from "@prisma/client";
+import { afterResponse } from "@/lib/after-response";
 import {
   evaluateLowStock,
   getCurrentStockMl,
@@ -150,8 +151,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    await evaluateLowStock(parsed.productId);
     revalidateTag("inventory-levels", { expire: 0 });
+    afterResponse(() => evaluateLowStock(parsed.productId), "inventory/adjust low-stock");
     recordApiMetric("POST /api/inventory/adjust", 201, Date.now() - startedAt);
     return apiOk({ movement }, 201);
   } catch (error) {

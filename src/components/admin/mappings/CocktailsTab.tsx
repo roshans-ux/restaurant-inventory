@@ -241,24 +241,38 @@ export default function CocktailsTab() {
     const data = await res.json();
     if (!res.ok || data.ok === false || data.error) {
       setError(data.error?.message ?? "Failed to save cocktail mapping");
-    } else {
-      setOk(`${editingId ? "Updated" : "Saved"}: ${data.mapping.name}`);
-      await load();
+    } else if (data.mapping) {
+      const mapping = data.mapping as CocktailMapping;
+      setOk(`${editingId ? "Updated" : "Saved"}: ${mapping.name}`);
+      setMappings((prev) => {
+        if (editingId) {
+          return prev.map((m) => (m.id === editingId ? mapping : m));
+        }
+        return [mapping, ...prev.filter((m) => m.id !== mapping.id)];
+      });
       resetForm();
+    } else {
+      setError("Failed to save cocktail mapping");
     }
     setSaving(false);
   }
 
   async function onDelete(mapping: CocktailMapping) {
     if (!window.confirm(`Delete cocktail mapping "${mapping.name}"?`)) return;
-    const res = await fetch(`/api/cocktail-mappings/${mapping.id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok || data.ok === false || data.error) {
-      setError(getApiErrorMessage(data, "Failed to delete"));
-      return;
-    }
+    const previous = mappings;
+    setMappings((prev) => prev.filter((m) => m.id !== mapping.id));
     if (editingId === mapping.id) resetForm();
-    await load();
+    try {
+      const res = await fetch(`/api/cocktail-mappings/${mapping.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || data.ok === false || data.error) {
+        setMappings(previous);
+        setError(getApiErrorMessage(data, "Failed to delete"));
+      }
+    } catch {
+      setMappings(previous);
+      setError("Failed to delete");
+    }
   }
 
   return (

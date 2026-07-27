@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { afterResponse } from "@/lib/after-response";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { createAuthToken } from "@/lib/auth/tokens";
@@ -22,12 +23,18 @@ export async function POST(request: NextRequest) {
         const raw = await createAuthToken(user.id, "EMAIL_VERIFICATION");
         const verifyUrl = `${getAppBaseUrl(request)}/api/auth/verify-email?token=${encodeURIComponent(raw)}`;
         const content = verificationEmailContent(verifyUrl);
-        await sendEmail({ to: user.email, ...content });
+        afterResponse(
+          () => sendEmail({ to: user.email, ...content }),
+          "forgot-password verification email",
+        );
       } else {
         const raw = await createAuthToken(user.id, "PASSWORD_RESET");
         const resetUrl = `${getAppBaseUrl(request)}/reset-password?token=${encodeURIComponent(raw)}`;
         const content = passwordResetEmailContent(resetUrl);
-        await sendEmail({ to: user.email, ...content });
+        afterResponse(
+          () => sendEmail({ to: user.email, ...content }),
+          "forgot-password reset email",
+        );
       }
     }
 

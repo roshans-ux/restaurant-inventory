@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { afterResponse } from "@/lib/after-response";
 import { prisma } from "@/lib/prisma";
 import { syncLowStockAlerts } from "@/lib/inventory";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
@@ -46,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       data: parsed,
     });
 
-    await syncLowStockAlerts(productId);
+    afterResponse(() => syncLowStockAlerts(productId), "reorder-config low-stock");
 
     return Response.json({ config: updated });
   } catch (error) {

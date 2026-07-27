@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       const normalizedName = normalizeBottleName(parsed.name);
       const existingProducts = await tx.product.findMany({
         where: { tenantId: session.tenantId },
-        select: { id: true, name: true, bottleSizeMl: true },
+        select: { id: true, name: true, bottleSizeMl: true, sku: true },
       });
       const duplicate = existingProducts.find(
         (p) =>
@@ -81,12 +81,7 @@ export async function POST(request: NextRequest) {
       }
 
       const allSkus = new Set(
-        (
-          await tx.product.findMany({
-            where: { tenantId: session.tenantId, sku: { not: null } },
-            select: { sku: true },
-          })
-        )
+        existingProducts
           .map((x) => x.sku)
           .filter((x): x is string => Boolean(x))
           .map((x) => x.toUpperCase()),

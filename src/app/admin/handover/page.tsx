@@ -82,14 +82,39 @@ export default function HandoverPage() {
       setError("Select a SKU and enter a barcode");
       return;
     }
+    const selected = handoverProducts.find((p) => p.id === productId);
+    if (!selected) {
+      setError("Select a SKU and enter a barcode");
+      return;
+    }
+
+    const barcodeId = barcode.trim();
+    const tempId = `optimistic-${Date.now()}`;
+    const previous = activeRotations;
+    const bottleSizeMl = Number(selected.bottleSizeMl);
+
     setSubmitting(true);
     setError("");
-    setMessage("");
+    setMessage(`Bottle ${barcodeId} is now in rotation for ${selected.name}`);
+    setBarcode("");
+    barcodeRef.current?.focus();
+    setActiveRotations((prev) => [
+      {
+        id: tempId,
+        productId,
+        productName: selected.name,
+        barcodeId,
+        openedAt: new Date().toISOString(),
+        mlRemaining: bottleSizeMl,
+      },
+      ...prev.filter((x) => x.productId !== productId),
+    ]);
+
     try {
       const res = await fetch("/api/handover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, barcodeId: barcode.trim() }),
+        body: JSON.stringify({ productId, barcodeId }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
@@ -104,10 +129,10 @@ export default function HandoverPage() {
       const r = data.data?.rotation;
       if (!r) throw new Error("Failed to log bottle");
       setMessage(`Bottle ${r.barcodeId} is now in rotation for ${r.productName}`);
-      setBarcode("");
-      barcodeRef.current?.focus();
       setActiveRotations((prev) => {
-        const withoutSameSku = prev.filter((x) => x.productId !== r.productId);
+        const withoutTempOrSku = prev.filter(
+          (x) => x.id !== tempId && x.productId !== r.productId,
+        );
         return [
           {
             id: r.id,
@@ -117,10 +142,12 @@ export default function HandoverPage() {
             openedAt: r.openedAt,
             mlRemaining: r.mlRemaining,
           },
-          ...withoutSameSku,
+          ...withoutTempOrSku,
         ];
       });
     } catch (err) {
+      setActiveRotations(previous);
+      setMessage("");
       setError(err instanceof Error ? err.message : "Failed to log bottle");
     } finally {
       setSubmitting(false);

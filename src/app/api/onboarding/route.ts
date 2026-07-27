@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { afterResponse } from "@/lib/after-response";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { buildSessionPayload, slugFromRestaurantName } from "@/lib/auth/build-session";
@@ -72,30 +73,29 @@ export async function POST(request: NextRequest) {
 
     const rawApprovalToken = await createAuthToken(user.id, "ACCOUNT_APPROVAL");
 
-    let sheetSynced = true;
-    let alertSent = true;
-    try {
-      await appendBetaSignupRow({
-        restaurantName,
-        location,
-        email: user.email,
-        phone: user.phone,
-        heardAboutUs: parsed.heardAboutUs,
-        signedUpAt: signedUpAtIst,
-      });
-    } catch (err) {
-      sheetSynced = false;
-      console.error("[onboarding] Beta Signups sheet append failed:", err);
-    }
-    try {
-      await sendBetaSignupAlertEmail(request, betaDetails, rawApprovalToken);
-    } catch (err) {
-      alertSent = false;
-      console.error("[onboarding] beta approval alert email failed:", err);
-    }
+    // Sheets + email are non-critical for completing onboarding — don't block the response.
+    afterResponse(async () => {
+      await Promise.allSettled([
+        appendBetaSignupRow({
+          restaurantName,
+          location,
+          email: user.email,
+          phone: user.phone,
+          heardAboutUs: parsed.heardAboutUs,
+          signedUpAt: signedUpAtIst,
+        }).catch((err) => {
+          console.error("[onboarding] Beta Signups sheet append failed:", err);
+          throw err;
+        }),
+        sendBetaSignupAlertEmail(request, betaDetails, rawApprovalToken).catch((err) => {
+          console.error("[onboarding] beta approval alert email failed:", err);
+          throw err;
+        }),
+      ]);
+    }, "onboarding side-effects");
 
     const token = await createSessionToken(buildSessionPayload(user));
-    const response = NextResponse.json({ ok: true, sheetSynced, alertSent });
+    const response = NextResponse.json({ ok: true, sheetSynced: true, alertSent: true });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
     return response;
   } catch (error) {

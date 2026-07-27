@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { afterResponse } from "@/lib/after-response";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { createAuthToken } from "@/lib/auth/tokens";
@@ -12,13 +13,16 @@ const schema = z.object({
   email: z.string().email().optional(),
 });
 
-async function sendVerificationForEmail(request: NextRequest, email: string) {
+async function queueVerificationForEmail(request: NextRequest, email: string) {
   const user = await prisma.user.findUnique({ where: { email } });
   if (user && !user.emailVerifiedAt) {
     const raw = await createAuthToken(user.id, "EMAIL_VERIFICATION");
     const verifyUrl = `${getAppBaseUrl(request)}/api/auth/verify-email?token=${encodeURIComponent(raw)}`;
     const content = verificationEmailContent(verifyUrl);
-    await sendEmail({ to: user.email, ...content });
+    afterResponse(
+      () => sendEmail({ to: user.email, ...content }),
+      "resend-verification email",
+    );
   }
 }
 
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest) {
       body.email?.toLowerCase().trim() ?? session?.email?.toLowerCase().trim();
 
     if (email) {
-      await sendVerificationForEmail(request, email);
+      await queueVerificationForEmail(request, email);
     }
 
     return apiOk({ sent: true });

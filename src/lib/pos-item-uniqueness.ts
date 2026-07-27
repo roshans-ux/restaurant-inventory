@@ -12,25 +12,27 @@ export async function findPosItemConflict(
   const trimmed = posItemId.trim();
   if (!trimmed) return null;
 
-  const pour = await prisma.posMenuMapping.findFirst({
-    where: {
-      tenantId,
-      posItemId: trimmed,
-      ...(exclude?.pourMappingId ? { NOT: { id: exclude.pourMappingId } } : {}),
-    },
-    include: { product: true },
-  });
+  const [pour, cocktail] = await Promise.all([
+    prisma.posMenuMapping.findFirst({
+      where: {
+        tenantId,
+        posItemId: trimmed,
+        ...(exclude?.pourMappingId ? { NOT: { id: exclude.pourMappingId } } : {}),
+      },
+      include: { product: true },
+    }),
+    prisma.cocktailMapping.findFirst({
+      where: {
+        tenantId,
+        posItemId: trimmed,
+        ...(exclude?.cocktailMappingId ? { NOT: { id: exclude.cocktailMappingId } } : {}),
+      },
+    }),
+  ]);
+
   if (pour) {
     return { kind: "pour", label: pour.product.name };
   }
-
-  const cocktail = await prisma.cocktailMapping.findFirst({
-    where: {
-      tenantId,
-      posItemId: trimmed,
-      ...(exclude?.cocktailMappingId ? { NOT: { id: exclude.cocktailMappingId } } : {}),
-    },
-  });
   if (cocktail) {
     return { kind: "cocktail", label: cocktail.name };
   }

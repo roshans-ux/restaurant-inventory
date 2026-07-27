@@ -64,34 +64,35 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = bulkSchema.parse(await request.json());
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: session.tenantId },
-      select: { name: true },
-    });
+    const [tenant, orders] = await Promise.all([
+      prisma.tenant.findUnique({
+        where: { id: session.tenantId },
+        select: { name: true },
+      }),
+      prisma.stockOrder.findMany({
+        where: {
+          id: { in: payload.orderIds },
+          tenantId: session.tenantId,
+          status:
+            payload.action === "place"
+              ? { in: [StockOrderStatus.PENDING, StockOrderStatus.MODIFIED] }
+              : {
+                  in: [
+                    StockOrderStatus.PENDING,
+                    StockOrderStatus.MODIFIED,
+                    StockOrderStatus.PLACED,
+                  ],
+                },
+        },
+        include: {
+          product: true,
+          vendor: true,
+        },
+      }),
+    ]);
     if (!tenant) {
       return apiError("TENANT_NOT_FOUND", "Venue not found", 404);
     }
-
-    const orders = await prisma.stockOrder.findMany({
-      where: {
-        id: { in: payload.orderIds },
-        tenantId: session.tenantId,
-        status:
-          payload.action === "place"
-            ? { in: [StockOrderStatus.PENDING, StockOrderStatus.MODIFIED] }
-            : {
-                in: [
-                  StockOrderStatus.PENDING,
-                  StockOrderStatus.MODIFIED,
-                  StockOrderStatus.PLACED,
-                ],
-              },
-      },
-      include: {
-        product: true,
-        vendor: true,
-      },
-    });
 
     if (orders.length === 0) {
       return apiError("NO_ORDERS", "No eligible orders found", 400);

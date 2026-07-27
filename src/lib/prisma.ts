@@ -51,10 +51,9 @@ export function getPrismaClient(): PrismaClient {
   }
 
   const client = createPrismaClient();
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = client;
-    globalForPrisma.prismaGeneration = PRISMA_CLIENT_GENERATION;
-  }
+  // Cache on globalThis in all environments so serverless/hot-reload reuse the pool.
+  globalForPrisma.prisma = client;
+  globalForPrisma.prismaGeneration = PRISMA_CLIENT_GENERATION;
   return client;
 }
 

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
+import { afterResponse } from "@/lib/after-response";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
@@ -56,12 +57,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         ? payload.bottleSizeMl
         : Number(existing.bottleSizeMl);
 
-    if (cleanedName || payload.bottleSizeMl !== undefined) {
+    const nextSku =
+      payload.sku !== undefined
+        ? payload.sku?.trim() || skuFromNameAndSize(nextName, bottleSizeMl)
+        : skuFromNameAndSize(nextName, bottleSizeMl);
+
+    const needsNameSizeCheck = Boolean(cleanedName || payload.bottleSizeMl !== undefined);
+    const others = await prisma.product.findMany({
+      where: { tenantId: session.tenantId, id: { not: id } },
+      select: {
+        name: true,
+        bottleSizeMl: true,
+        sku: true,
+      },
+    });
+
+    if (needsNameSizeCheck) {
       const normalized = normalizeBottleName(nextName);
-      const others = await prisma.product.findMany({
-        where: { tenantId: session.tenantId, id: { not: id } },
-        select: { name: true, bottleSizeMl: true },
-      });
       const dup = others.find(
         (p) =>
           normalizeBottleName(p.name) === normalized &&
@@ -77,17 +89,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       }
     }
 
-    const nextSku =
-      payload.sku !== undefined
-        ? payload.sku?.trim() || skuFromNameAndSize(nextName, bottleSizeMl)
-        : skuFromNameAndSize(nextName, bottleSizeMl);
-
-    const skuRows = await prisma.product.findMany({
-      where: { tenantId: session.tenantId, id: { not: id }, sku: { not: null } },
-      select: { sku: true },
-    });
     const takenSkus = new Set(
-      skuRows
+      others
         .map((x) => x.sku)
         .filter((x): x is string => Boolean(x))
         .map((x) => x.toUpperCase()),
@@ -178,7 +181,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       payload.thresholdBottles !== undefined ||
       payload.reorderQuantity !== undefined
     ) {
-      await syncLowStockAlerts(id);
+      afterResponse(() => syncLowStockAlerts(id), "products/patch low-stock");
     }
 
     recordApiMetric("PATCH /api/products/[id]", 200, Date.now() - startedAt);

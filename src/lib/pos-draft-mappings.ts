@@ -35,28 +35,38 @@ export async function ensureDraftMappingsForProduct(
   productId: string,
   bottleSizeMl: number,
 ) {
-  for (const pourMl of draftPourSizesForBottle(bottleSizeMl)) {
-    const existing = await db.posMenuMapping.findFirst({
-      where: {
-        tenantId,
-        productId,
-        pourMl: pourMlDecimal(pourMl),
-      },
-    });
+  const pourSizes = draftPourSizesForBottle(bottleSizeMl);
+  const existing = await db.posMenuMapping.findMany({
+    where: { tenantId, productId },
+  });
+  const byPourMl = new Map(existing.map((row) => [Number(row.pourMl), row]));
 
-    if (!existing) {
-      await db.posMenuMapping.create({
-        data: draftMappingCreateData(tenantId, productId, pourMl),
-      });
+  const toCreate: Prisma.PosMenuMappingUncheckedCreateInput[] = [];
+  const unsuppressIds: string[] = [];
+
+  for (const pourMl of pourSizes) {
+    const row = byPourMl.get(pourMl);
+    if (!row) {
+      toCreate.push(draftMappingCreateData(tenantId, productId, pourMl));
       continue;
     }
-
-    if (isDraftSuppressedPosItemId(existing.posItemId)) {
-      await db.posMenuMapping.update({
-        where: { id: existing.id },
-        data: { posItemId: null },
-      });
+    if (isDraftSuppressedPosItemId(row.posItemId)) {
+      unsuppressIds.push(row.id);
     }
+  }
+
+  if (toCreate.length > 0) {
+    await db.posMenuMapping.createMany({ data: toCreate });
+  }
+  if (unsuppressIds.length > 0) {
+    await Promise.all(
+      unsuppressIds.map((id) =>
+        db.posMenuMapping.update({
+          where: { id },
+          data: { posItemId: null },
+        }),
+      ),
+    );
   }
 }
 
@@ -87,21 +97,27 @@ export async function syncDraftMappingsForTenant(tenantId: string) {
     select: { id: true, bottleSizeMl: true },
   });
 
-  for (const product of products) {
-    const bottleSizeMl = Number(product.bottleSizeMl);
-    try {
-      if (isBeerBottleSize(bottleSizeMl)) {
-        await reconcileBeerProductMappings(prisma, tenantId, product.id, bottleSizeMl);
-      } else {
-        await ensureDraftMappingsForProduct(prisma, tenantId, product.id, bottleSizeMl);
-      }
-    } catch (error) {
-      console.error(
-        `Draft mapping sync failed for product ${product.id}:`,
-        error instanceof Error ? error.message : error,
-      );
-      throw error;
-    }
+  const concurrency = 5;
+  for (let i = 0; i < products.length; i += concurrency) {
+    const batch = products.slice(i, i + concurrency);
+    await Promise.all(
+      batch.map(async (product) => {
+        const bottleSizeMl = Number(product.bottleSizeMl);
+        try {
+          if (isBeerBottleSize(bottleSizeMl)) {
+            await reconcileBeerProductMappings(prisma, tenantId, product.id, bottleSizeMl);
+          } else {
+            await ensureDraftMappingsForProduct(prisma, tenantId, product.id, bottleSizeMl);
+          }
+        } catch (error) {
+          console.error(
+            `Draft mapping sync failed for product ${product.id}:`,
+            error instanceof Error ? error.message : error,
+          );
+          throw error;
+        }
+      }),
+    );
   }
 }
 
