@@ -75,10 +75,10 @@ Allowed in UI/API: **330ml, 650ml, 750ml, 1L (1000), 1.75L (1750), 2L (2000)** â
 | Route | Purpose |
 |--------|---------|
 | `/` | Marketing landing page |
-| `/signup`, `/login`, `/verify-email` | Account creation and sign-in |
+| `/signup`, `/login` | Account creation and sign-in |
 | `/forgot-password`, `/reset-password` | Password recovery |
-| `/onboarding` | Venue setup after verify |
-| `/pending-approval` | Account approval gate (if used) |
+| `/onboarding` | Venue setup after signup |
+| `/pending-approval` | Waits for admin approval (`/api/admin/approve` sets `emailVerifiedAt`) |
 | `/admin/alerts` | Redirects to `/admin` |
 
 ---

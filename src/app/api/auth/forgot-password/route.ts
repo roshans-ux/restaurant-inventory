@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { createAuthToken } from "@/lib/auth/tokens";
 import { getAppBaseUrl } from "@/lib/email/app-url";
-import { passwordResetEmailContent, verificationEmailContent } from "@/lib/email/messages";
+import { passwordResetEmailContent } from "@/lib/email/messages";
 import { sendEmail } from "@/lib/email/send";
 
 const schema = z.object({
@@ -19,23 +19,13 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { email: normalized } });
     if (user) {
-      if (!user.emailVerifiedAt) {
-        const raw = await createAuthToken(user.id, "EMAIL_VERIFICATION");
-        const verifyUrl = `${getAppBaseUrl(request)}/api/auth/verify-email?token=${encodeURIComponent(raw)}`;
-        const content = verificationEmailContent(verifyUrl);
-        afterResponse(
-          () => sendEmail({ to: user.email, ...content }),
-          "forgot-password verification email",
-        );
-      } else {
-        const raw = await createAuthToken(user.id, "PASSWORD_RESET");
-        const resetUrl = `${getAppBaseUrl(request)}/reset-password?token=${encodeURIComponent(raw)}`;
-        const content = passwordResetEmailContent(resetUrl);
-        afterResponse(
-          () => sendEmail({ to: user.email, ...content }),
-          "forgot-password reset email",
-        );
-      }
+      const raw = await createAuthToken(user.id, "PASSWORD_RESET");
+      const resetUrl = `${getAppBaseUrl(request)}/reset-password?token=${encodeURIComponent(raw)}`;
+      const content = passwordResetEmailContent(resetUrl);
+      afterResponse(
+        () => sendEmail({ to: user.email, ...content }),
+        "forgot-password reset email",
+      );
     }
 
     return apiOk({

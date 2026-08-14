@@ -47,12 +47,6 @@ export default function LoginForm() {
           router.refresh();
           return;
         }
-        if (data.error?.code === "EMAIL_NOT_VERIFIED") {
-          const addr = encodeURIComponent(email.toLowerCase().trim());
-          router.replace(`/verify-email?email=${addr}`);
-          router.refresh();
-          return;
-        }
         throw new Error(
           data.error?.message ?? data.error?.code ?? "Login failed",
         );

@@ -33,9 +33,12 @@ export async function POST(request: NextRequest) {
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      return apiError("EMAIL_IN_USE", "An account with this email already exists", 409, {
-        field: "email",
-      });
+      return apiError(
+        "EMAIL_IN_USE",
+        "An account with this email already exists. Sign in instead, or use Forgot password.",
+        409,
+        { field: "email" },
+      );
     }
 
     const slugBase = slugFromRestaurantName("new-venue");

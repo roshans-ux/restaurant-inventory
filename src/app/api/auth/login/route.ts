@@ -26,15 +26,15 @@ export async function POST(request: NextRequest) {
       return apiError("INVALID_CREDENTIALS", "Invalid email or password", 401);
     }
 
-    if (!user.emailVerifiedAt) {
-      const pendingApproval = user.tenant.onboardingCompletedAt != null;
+    // `emailVerifiedAt` doubles as the approval flag: it is only set by an admin
+    // approval, so an unapproved account that has finished onboarding waits, while
+    // one that has not gets a session back and resumes onboarding.
+    if (!user.emailVerifiedAt && user.tenant.onboardingCompletedAt != null) {
       return apiError(
-        pendingApproval ? "PENDING_APPROVAL" : "EMAIL_NOT_VERIFIED",
-        pendingApproval
-          ? "Your account is awaiting approval. We will contact you on your phone number soon."
-          : "Verify your email before signing in. Check your inbox or resend the link.",
+        "PENDING_APPROVAL",
+        "Your account is awaiting approval. We will contact you on your phone number soon.",
         403,
-        { email: user.email, pendingApproval },
+        { email: user.email, pendingApproval: true },
       );
     }
 
