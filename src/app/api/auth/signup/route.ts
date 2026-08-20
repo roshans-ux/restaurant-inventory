@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { hashPassword } from "@/lib/auth/password";
 import { buildSessionPayload, slugFromRestaurantName } from "@/lib/auth/build-session";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth/session";
+import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 
 const signupSchema = z
   .object({
     email: z.string().trim().min(1, "Invalid Email").email("Invalid Email"),
-    phone: z
-      .string()
-      .trim()
-      .min(7, "Enter a valid phone number")
-      .max(20, "Enter a valid phone number")
-      .regex(/^[+0-9()\-\s]+$/, "Enter a valid phone number"),
+    phone: z.string().trim().min(1, INDIAN_PHONE_ERROR),
     password: z.string().min(8, "Password must be at least 8 characters"),
     passwordConfirm: z.string().min(8),
   })
@@ -24,11 +20,23 @@ const signupSchema = z
     path: ["passwordConfirm"],
   });
 
+function defaultPosWebhookSecret() {
+  const fromEnv = process.env.POS_WEBHOOK_SECRET?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV === "production") {
+    return randomBytes(32).toString("hex");
+  }
+  return "dev-secret";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const parsed = signupSchema.parse(await request.json());
     const email = parsed.email.toLowerCase().trim();
-    const phone = parsed.phone.trim();
+    const phone = normalizeIndianPhone(parsed.phone);
+    if (!phone) {
+      return apiError("INVALID_SIGNUP", INDIAN_PHONE_ERROR, 400, { field: "phone" });
+    }
     const password = parsed.password;
 
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -46,7 +54,7 @@ export async function POST(request: NextRequest) {
       data: {
         name: "My Restaurant",
         slug: `${slugBase}-${randomUUID().slice(0, 6)}`,
-        posWebhookSecret: (process.env.POS_WEBHOOK_SECRET ?? "dev-secret").trim(),
+        posWebhookSecret: defaultPosWebhookSecret(),
       },
     });
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import PasswordInput from "@/components/PasswordInput";
+import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -40,9 +41,9 @@ export default function SignupForm() {
       setEmailError("Invalid Email");
       hasError = true;
     }
-    const phoneTrimmed = phone.trim();
-    if (phoneTrimmed.length < 7 || !/^[+0-9()\-\s]+$/.test(phoneTrimmed)) {
-      setPhoneError("Enter a valid phone number");
+    const normalizedPhone = normalizeIndianPhone(phone);
+    if (!normalizedPhone) {
+      setPhoneError(INDIAN_PHONE_ERROR);
       hasError = true;
     }
     if (password.length < 8) {
@@ -53,7 +54,7 @@ export default function SignupForm() {
       setConfirmError("Passwords do not match");
       hasError = true;
     }
-    if (hasError) {
+    if (hasError || !normalizedPhone) {
       setLoading(false);
       return;
     }
@@ -62,7 +63,12 @@ export default function SignupForm() {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, phone: phoneTrimmed, password, passwordConfirm }),
+        body: JSON.stringify({
+          email,
+          phone: normalizedPhone,
+          password,
+          passwordConfirm,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

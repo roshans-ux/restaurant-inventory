@@ -10,6 +10,7 @@ import {
   type DayShift,
 } from "@/lib/shift-schedule";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
+import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 
 type TenantInfo = {
   name: string;
@@ -191,11 +192,17 @@ export default function SettingsPage() {
     e.preventDefault();
     setAddingVendor(true);
     setVendorError("");
+    const whatsappNumber = normalizeIndianPhone(vendorPhone);
+    if (!whatsappNumber) {
+      setVendorError(INDIAN_PHONE_ERROR);
+      setAddingVendor(false);
+      return;
+    }
     try {
       const res = await fetch("/api/vendors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: vendorName, whatsappNumber: vendorPhone }),
+        body: JSON.stringify({ name: vendorName, whatsappNumber }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
@@ -258,11 +265,17 @@ export default function SettingsPage() {
     if (!editingVendorId) return;
     setSavingVendor(true);
     setVendorError("");
+    const whatsappNumber = normalizeIndianPhone(editVendorPhone);
+    if (!whatsappNumber) {
+      setVendorError(INDIAN_PHONE_ERROR);
+      setSavingVendor(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/vendors/${editingVendorId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editVendorName, whatsappNumber: editVendorPhone }),
+        body: JSON.stringify({ name: editVendorName, whatsappNumber }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
@@ -316,15 +329,21 @@ export default function SettingsPage() {
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >
             <div>
-              <p className="text-sm font-medium">{tenant.name}</p>
+              <p className="text-sm font-medium">POS connection</p>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Slug: {tenant.slug}
+                {tenant.name} · {tenant.slug}
               </p>
             </div>
-            <CopyField label="Tenant API key (x-tenant-api-key)" value={tenant.apiKey} />
-            {tenant.posWebhookSecret && (
-              <CopyField label="Webhook HMAC secret" value={tenant.posWebhookSecret} />
-            )}
+            <CopyField label="Webhook endpoint" value={webhookUrl} />
+            <CopyField label="Tenant API Key" value={tenant.apiKey ?? ""} />
+            <CopyField label="POS Webhook Secret" value={tenant.posWebhookSecret ?? ""} />
+            <div className="text-xs space-y-1" style={{ color: "var(--text-muted)" }}>
+              <p>Required headers on every sale webhook:</p>
+              <ul className="list-disc pl-4 space-y-0.5 font-mono">
+                <li>x-tenant-api-key — Tenant API Key</li>
+                <li>x-pos-signature — HMAC-SHA256 hex of the raw JSON body (use POS Webhook Secret)</li>
+              </ul>
+            </div>
           </div>
 
           <form
@@ -480,6 +499,7 @@ export default function SettingsPage() {
                           }}
                         />
                         <input
+                          type="tel"
                           value={editVendorPhone}
                           onChange={(e) => setEditVendorPhone(e.target.value)}
                           required
@@ -569,6 +589,7 @@ export default function SettingsPage() {
                 }}
               />
               <input
+                type="tel"
                 placeholder="WhatsApp number"
                 value={vendorPhone}
                 onChange={(e) => setVendorPhone(e.target.value)}
@@ -595,21 +616,6 @@ export default function SettingsPage() {
                 {addingVendor ? "Adding…" : "Add Vendor"}
               </button>
             </form>
-          </div>
-
-          <div
-            className="rounded-xl p-5 space-y-3"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
-            <p className="text-sm font-medium">POS webhook</p>
-            <CopyField label="Endpoint" value={webhookUrl} />
-            <div className="text-xs space-y-1" style={{ color: "var(--text-muted)" }}>
-              <p>Required headers:</p>
-              <ul className="list-disc pl-4 space-y-0.5 font-mono">
-                <li>x-tenant-api-key — your tenant API key above</li>
-                <li>x-pos-signature — HMAC-SHA256 hex of the raw JSON body</li>
-              </ul>
-            </div>
           </div>
         </div>
       )}

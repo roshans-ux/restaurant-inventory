@@ -50,7 +50,7 @@ export default function PendingApprovalActions() {
         </a>
         .
       </p>
-      <p className="text-white/60" style={{ fontSize: 12 }}>
+      <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
         This page checks for approval every few seconds.
       </p>
     </div>

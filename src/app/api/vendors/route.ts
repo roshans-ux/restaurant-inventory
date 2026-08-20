@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
+import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 
 const getCachedVendorsLean = unstable_cache(
   async (tenantId: string) =>
@@ -61,11 +62,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = createSchema.parse(await request.json());
+    const whatsappNumber = normalizeIndianPhone(payload.whatsappNumber);
+    if (!whatsappNumber) {
+      return apiError("INVALID_WHATSAPP", INDIAN_PHONE_ERROR, 400, {
+        field: "whatsappNumber",
+      });
+    }
     const vendor = await prisma.vendor.create({
       data: {
         tenantId: session.tenantId,
         name: payload.name.trim(),
-        whatsappNumber: payload.whatsappNumber.trim(),
+        whatsappNumber,
       },
     });
     revalidateTag("vendors", { expire: 0 });

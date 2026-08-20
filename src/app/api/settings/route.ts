@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
@@ -49,8 +50,19 @@ export async function GET(request: NextRequest) {
     if (!tenant) {
       return apiError("TENANT_NOT_FOUND", "Venue not found", 404);
     }
+
+    let posWebhookSecret = tenant.posWebhookSecret?.trim() ?? "";
+    if (!posWebhookSecret) {
+      posWebhookSecret = randomBytes(32).toString("hex");
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { posWebhookSecret },
+      });
+    }
+
     return apiOk({
       ...tenant,
+      posWebhookSecret,
       shiftSchedule: parseShiftSchedule(tenant.shiftSchedule),
     });
   } catch (error) {

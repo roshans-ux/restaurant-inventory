@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
+import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,13 +27,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     const payload = patchSchema.parse(await request.json());
+    let whatsappNumber: string | undefined;
+    if (payload.whatsappNumber !== undefined) {
+      const normalized = normalizeIndianPhone(payload.whatsappNumber);
+      if (!normalized) {
+        return apiError("INVALID_WHATSAPP", INDIAN_PHONE_ERROR, 400, {
+          field: "whatsappNumber",
+        });
+      }
+      whatsappNumber = normalized;
+    }
     const vendor = await prisma.vendor.update({
       where: { id },
       data: {
         ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
-        ...(payload.whatsappNumber !== undefined
-          ? { whatsappNumber: payload.whatsappNumber.trim() }
-          : {}),
+        ...(whatsappNumber !== undefined ? { whatsappNumber } : {}),
       },
     });
     revalidateTag("vendors", { expire: 0 });
