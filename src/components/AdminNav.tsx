@@ -14,6 +14,7 @@ import {
   ArrowRightLeft,
   ClipboardList,
   Bell,
+  BookOpen,
 } from "lucide-react";
 import NotificationsPopover from "@/components/admin/NotificationsPopover";
 import { useAdminSession } from "@/components/admin/AdminSessionContext";
@@ -67,6 +68,12 @@ const links = [
     label: "Settings",
     description: "API keys, shift times, slippage rules, and suppliers",
     icon: Settings,
+  },
+  {
+    href: "/admin/docs/pos-integration",
+    label: "Documentation",
+    description: "POS webhook setup and integration guide",
+    icon: BookOpen,
   },
 ];
 
