@@ -418,6 +418,7 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
         </h2>
 
         <div className="grid gap-4">
+            {!(editingId && selectedIsBeer) && (
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                 Bottle
@@ -428,6 +429,7 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
                 onChange={onProductChange}
               />
             </label>
+            )}
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
@@ -451,6 +453,7 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
             </span>
           </label>
 
+          {!(editingId && selectedIsBeer) && (
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
               Sale Size
@@ -459,7 +462,7 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 {formatMappingSaleSize(selectedBottleSizeMl, selectedBottleSizeMl)}{" "}
                 <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  (beer — full bottle only; set POS Item ID in the table)
+                  (beer — full bottle only)
                 </span>
               </p>
             ) : (
@@ -507,6 +510,7 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
               </div>
             )}
           </label>
+          )}
         </div>
 
         {error && <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>{error}</p>}
@@ -612,8 +616,6 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
                   {visibleMappings.map((m, i) => {
                     const configured = isPosItemConfigured(m.posItemId);
                     const bottleSizeMl = Number(m.product.bottleSizeMl);
-                    const isBeerRow =
-                      isBeerBottleSize(bottleSizeMl) && Number(m.pourMl) === bottleSizeMl;
                     return (
                       <tr
                         key={m.id}
@@ -640,35 +642,33 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
                           <span className="mt-0.5 block text-[11px]">{formatActivityTime(m.createdAt)}</span>
                         </td>
                         <td className="shrink-0 px-4 py-3 text-right">
-                          {!isBeerRow && (
-                            <div className="flex flex-wrap justify-end gap-2 whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => onEdit(m)}
-                                className="rounded-lg px-3 py-1.5 text-xs font-medium"
-                                style={{
-                                  border: "1px solid var(--border)",
-                                  color: "var(--text-secondary)",
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setError("");
-                                  setDeleteTarget(m);
-                                }}
-                                className="rounded-lg px-3 py-1.5 text-xs font-medium"
-                                style={{
-                                  border: "1px solid rgba(224,92,92,0.4)",
-                                  color: "var(--red)",
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          )}
+                          <div className="flex flex-wrap justify-end gap-2 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => onEdit(m)}
+                              className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                              style={{
+                                border: "1px solid var(--border)",
+                                color: "var(--text-secondary)",
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setError("");
+                                setDeleteTarget(m);
+                              }}
+                              className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                              style={{
+                                border: "1px solid rgba(224,92,92,0.4)",
+                                color: "var(--red)",
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

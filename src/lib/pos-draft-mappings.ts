@@ -51,6 +51,10 @@ export async function ensureDraftMappingsForProduct(
       continue;
     }
     if (isDraftSuppressedPosItemId(row.posItemId)) {
+      // Keep beer full-bottle deletions; don't revive the slot on the next sync.
+      if (isBeerBottleSize(bottleSizeMl) && pourMl === bottleSizeMl) {
+        continue;
+      }
       unsuppressIds.push(row.id);
     }
   }
