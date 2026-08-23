@@ -418,7 +418,6 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
         </h2>
 
         <div className="grid gap-4">
-            {!(editingId && selectedIsBeer) && (
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                 Bottle
@@ -429,7 +428,6 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
                 onChange={onProductChange}
               />
             </label>
-            )}
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
@@ -453,18 +451,25 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
             </span>
           </label>
 
-          {!(editingId && selectedIsBeer) && (
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
               Sale Size
             </span>
             {selectedIsBeer && selectedBottleSizeMl != null ? (
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                {formatMappingSaleSize(selectedBottleSizeMl, selectedBottleSizeMl)}{" "}
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  (beer — full bottle only)
-                </span>
-              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-lg px-4 py-2 text-sm font-medium"
+                  style={{
+                    background: "var(--accent-dim)",
+                    color: "var(--accent)",
+                    border: "1px solid rgba(245,166,35,0.3)",
+                  }}
+                >
+                  {formatMappingSaleSize(selectedBottleSizeMl, selectedBottleSizeMl)}
+                </button>
+              </div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {FIXED_POUR_OPTIONS_ML.map((ml) => (
@@ -510,7 +515,6 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
               </div>
             )}
           </label>
-          )}
         </div>
 
         {error && <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>{error}</p>}
