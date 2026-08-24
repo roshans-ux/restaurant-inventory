@@ -103,7 +103,7 @@ export default function PosIntegrationDocsPage() {
       <div className="mb-8 max-w-3xl">
         <h1 className="text-2xl font-semibold">POS Integration Guide</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          How to connect your Point of Sale system to Bar Inventory
+          How to connect your Point of Sale system to Bar Tally
         </p>
       </div>
 
@@ -151,7 +151,7 @@ export default function PosIntegrationDocsPage() {
               external URL when a sale is completed)
             </li>
             <li>
-              Your Bar Inventory account is set up with at least one bottle and one POS mapping
+              Your Bar Tally account is set up with at least one bottle and one POS mapping
               configured
             </li>
             <li>
@@ -226,7 +226,7 @@ export default function PosIntegrationDocsPage() {
                 "lines[].pos_item_id",
                 "string",
                 "Yes",
-                "The POS item ID that matches a mapping configured in Bar Inventory.",
+                "The POS item ID that matches a mapping configured in Bar Tally.",
               ],
               ["lines[].quantity", "integer", "Yes", "Number of units sold."],
               [
@@ -247,7 +247,7 @@ export default function PosIntegrationDocsPage() {
               [
                 "409 Conflict",
                 "Insufficient stock for one or more items",
-                "Check stock levels in Bar Inventory and restock before retrying",
+                "Check stock levels in Bar Tally and restock before retrying",
               ],
               [
                 "401 Unauthorized",

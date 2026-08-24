@@ -16,7 +16,7 @@ function htmlPage(title: string, body: string, ok: boolean) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title} — Bar Inventory</title>
+  <title>${title} — Bar Tally</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #0e0e11; color: #f4f0e8; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .card { max-width: 420px; background: #1a1a1f; border: 1px solid #2a2a32; border-radius: 12px; padding: 32px; text-align: center; }

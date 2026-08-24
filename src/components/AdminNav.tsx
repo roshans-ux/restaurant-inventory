@@ -144,7 +144,7 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
                 {venueName ?? "My Restaurant"}
               </span>
               <span className="block truncate text-xs" style={{ color: "var(--text-muted)" }}>
-                Bar Inventory · Go to home
+                Bar Tally · Go to home
               </span>
             </div>
           </Link>

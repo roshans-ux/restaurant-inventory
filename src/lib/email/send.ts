@@ -11,7 +11,7 @@ export type SendEmailResult = { ok: true; dev?: boolean };
 
 export function getEmailFrom(): string {
   return (
-    process.env.EMAIL_FROM?.trim() ?? "Bar Inventory <onboarding@resend.dev>"
+    process.env.EMAIL_FROM?.trim() ?? "Bar Tally <onboarding@resend.dev>"
   );
 }
 

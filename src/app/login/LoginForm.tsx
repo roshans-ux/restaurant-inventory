@@ -74,7 +74,7 @@ export default function LoginForm() {
         <span className="text-3xl" role="img" aria-label="bar">
           🍶
         </span>
-        <h1 className="mt-2 text-xl font-semibold">Bar Inventory</h1>
+        <h1 className="mt-2 text-xl font-semibold">Bar Tally</h1>
         <p className="mt-1">Sign in to your venue admin</p>
       </div>
 

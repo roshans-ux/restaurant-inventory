@@ -108,7 +108,7 @@ export default function SignupForm() {
           🍶
         </span>
         <h1 className="mt-2 text-xl font-semibold">Create your account</h1>
-        <p className="mt-1">Bar Inventory — manage your venue stock</p>
+        <p className="mt-1">Bar Tally — manage your venue stock</p>
       </div>
 
       <div className="grid gap-4">
