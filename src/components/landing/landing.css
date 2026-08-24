@@ -294,6 +294,7 @@ html:has(.landing-root) {
 
 .lp-marquee-track span {
   flex-shrink: 0;
+  word-spacing: 0.18em;
 }
 
 @keyframes lp-marquee {
