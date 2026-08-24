@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { DAY_KEYS, parseShiftSchedule } from "@/lib/shift-schedule";
+import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
+import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
 
 const timeSchema = z.union([
   z.string().regex(/^\d{2}:\d{2}$/),
@@ -24,6 +26,7 @@ const patchSchema = z.object({
   shiftSchedule: z
     .record(z.string(), dayShiftSchema)
     .optional(),
+  adminWhatsappNumber: z.union([z.string(), z.null()]).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -45,6 +48,7 @@ export async function GET(request: NextRequest) {
         shiftReportWindowEndAt: true,
         apiKey: true,
         posWebhookSecret: true,
+        adminWhatsappNumber: true,
       },
     });
     if (!tenant) {
@@ -64,6 +68,7 @@ export async function GET(request: NextRequest) {
       ...tenant,
       posWebhookSecret,
       shiftSchedule: parseShiftSchedule(tenant.shiftSchedule),
+      whatsappConnected: isWhatsAppConfigured(),
     });
   } catch (error) {
     return apiError("SETTINGS_FETCH_FAILED", "Failed to fetch settings", 500, {
@@ -78,6 +83,22 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const payload = patchSchema.parse(await request.json());
+
+    let adminWhatsappNumber: string | null | undefined;
+    if (payload.adminWhatsappNumber !== undefined) {
+      const raw = payload.adminWhatsappNumber?.trim() ?? "";
+      if (!raw) {
+        adminWhatsappNumber = null;
+      } else {
+        const normalized = normalizeIndianPhone(raw);
+        if (!normalized) {
+          return apiError("INVALID_ADMIN_WHATSAPP", INDIAN_PHONE_ERROR, 400, {
+            field: "adminWhatsappNumber",
+          });
+        }
+        adminWhatsappNumber = normalized;
+      }
+    }
 
     if (payload.shiftSchedule) {
       for (const key of DAY_KEYS) {
@@ -111,10 +132,14 @@ export async function PATCH(request: NextRequest) {
         ...(payload.shiftSchedule !== undefined
           ? { shiftSchedule: payload.shiftSchedule }
           : {}),
+        ...(adminWhatsappNumber !== undefined
+          ? { adminWhatsappNumber }
+          : {}),
       },
       select: {
         slippageTolerancePercent: true,
         shiftSchedule: true,
+        adminWhatsappNumber: true,
       },
     });
     return apiOk({

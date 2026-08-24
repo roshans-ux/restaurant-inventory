@@ -1,6 +1,7 @@
 import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStockMl, isBelowThreshold } from "@/lib/inventory";
+import { sendAdminReorderPrompt } from "@/lib/whatsapp/client";
 
 export type PendingStockOrderContext = {
   currentMl: number;
@@ -52,7 +53,7 @@ export async function maybeCreatePendingStockOrder(
   });
   if (existingPending) return;
 
-  await prisma.stockOrder.create({
+  const order = await prisma.stockOrder.create({
     data: {
       tenantId,
       productId,
@@ -60,5 +61,24 @@ export async function maybeCreatePendingStockOrder(
       quantityBottles: reorderQuantity,
       status: StockOrderStatus.PENDING,
     },
+    include: {
+      product: { select: { name: true } },
+      vendor: { select: { name: true } },
+      tenant: { select: { name: true, adminWhatsappNumber: true } },
+    },
   });
+
+  try {
+    await sendAdminReorderPrompt({
+      tenantId,
+      stockOrderId: order.id,
+      adminWhatsappNumber: order.tenant.adminWhatsappNumber,
+      venueName: order.tenant.name,
+      productName: order.product.name,
+      quantityBottles: order.quantityBottles,
+      vendorName: order.vendor?.name ?? null,
+    });
+  } catch (error) {
+    console.error("[whatsapp] admin reorder prompt failed", error);
+  }
 }

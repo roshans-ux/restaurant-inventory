@@ -85,6 +85,19 @@ function needsAuth(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  const hostHeader =
+    request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ??
+    request.headers.get("host") ??
+    "";
+  const host = hostHeader.split(":")[0].toLowerCase();
+  if (host === "restaurant-inventory-sand.vercel.app") {
+    const dest = new URL(
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      "https://bartally.in",
+    );
+    return NextResponse.redirect(dest, 308);
+  }
+
   const { pathname } = request.nextUrl;
 
   if (isAuthDisabled()) {
@@ -197,13 +210,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/admin/:path*",
-    "/api/:path*",
-    "/login",
-    "/signup",
-    "/onboarding",
-    "/pending-approval",
-    "/forgot-password",
-    "/reset-password",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

@@ -17,6 +17,8 @@ type TenantInfo = {
   slug: string;
   apiKey: string;
   posWebhookSecret: string | null;
+  adminWhatsappNumber: string | null;
+  whatsappConnected?: boolean;
   slippageTolerancePercent: number;
   shiftSchedule: Record<DayKey, DayShift | null>;
 };
@@ -76,6 +78,9 @@ export default function SettingsPage() {
   const [schedule, setSchedule] = useState<Record<DayKey, DayShift | null>>({} as Record<DayKey, DayShift | null>);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState("");
+  const [adminWhatsapp, setAdminWhatsapp] = useState("");
+  const [adminWhatsappError, setAdminWhatsappError] = useState("");
+  const [whatsappConnected, setWhatsappConnected] = useState(false);
   const [vendorName, setVendorName] = useState("");
   const [vendorPhone, setVendorPhone] = useState("");
   const [vendorError, setVendorError] = useState("");
@@ -105,9 +110,12 @@ export default function SettingsPage() {
         slug: t.slug,
         apiKey: t.apiKey,
         posWebhookSecret: t.posWebhookSecret,
+        adminWhatsappNumber: t.adminWhatsappNumber ?? null,
         slippageTolerancePercent: t.slippageTolerancePercent ?? 10,
         shiftSchedule: t.shiftSchedule ?? {},
       });
+      setAdminWhatsapp(t.adminWhatsappNumber ?? "");
+      setWhatsappConnected(Boolean(t.whatsappConnected));
       setSlippage(String(t.slippageTolerancePercent ?? 10));
       setSchedule(t.shiftSchedule ?? {});
     }
@@ -142,6 +150,16 @@ export default function SettingsPage() {
     const previousTenant = tenant;
     const previousSlippage = slippage;
     const previousSchedule = schedule;
+    const previousAdminWhatsapp = adminWhatsapp;
+    setAdminWhatsappError("");
+    const normalizedAdmin = adminWhatsapp.trim()
+      ? normalizeIndianPhone(adminWhatsapp)
+      : null;
+    if (adminWhatsapp.trim() && !normalizedAdmin) {
+      setAdminWhatsappError(INDIAN_PHONE_ERROR);
+      setSavingSettings(false);
+      return;
+    }
     const nextSlippage = Math.round(Number(slippage));
     const nextSchedule = schedule;
     if (tenant) {
@@ -149,6 +167,7 @@ export default function SettingsPage() {
         ...tenant,
         slippageTolerancePercent: nextSlippage,
         shiftSchedule: nextSchedule,
+        adminWhatsappNumber: normalizedAdmin,
       });
     }
     setSettingsMsg("Saved");
@@ -159,6 +178,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           slippageTolerancePercent: nextSlippage,
           shiftSchedule: nextSchedule,
+          adminWhatsappNumber: normalizedAdmin,
         }),
       });
       const data = await readJsonResponse<{
@@ -166,6 +186,7 @@ export default function SettingsPage() {
         data?: {
           slippageTolerancePercent?: number;
           shiftSchedule?: Record<DayKey, DayShift | null>;
+          adminWhatsappNumber?: string | null;
         };
         error?: { message?: string; details?: unknown };
       }>(res);
@@ -175,13 +196,21 @@ export default function SettingsPage() {
           ...tenant,
           slippageTolerancePercent: data.data.slippageTolerancePercent ?? nextSlippage,
           shiftSchedule: data.data.shiftSchedule ?? nextSchedule,
+          adminWhatsappNumber:
+            data.data.adminWhatsappNumber !== undefined
+              ? data.data.adminWhatsappNumber
+              : normalizedAdmin,
         });
+        if (data.data.adminWhatsappNumber !== undefined) {
+          setAdminWhatsapp(data.data.adminWhatsappNumber ?? "");
+        }
       }
       setSettingsMsg("Saved");
     } catch (err) {
       setTenant(previousTenant);
       setSlippage(previousSlippage);
       setSchedule(previousSchedule);
+      setAdminWhatsapp(previousAdminWhatsapp);
       setSettingsMsg(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSavingSettings(false);
@@ -346,11 +375,65 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <form
-            onSubmit={saveSettings}
-            className="rounded-xl p-5 space-y-4"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-          >
+          <form onSubmit={saveSettings} className="space-y-4">
+            <div
+              className="rounded-xl p-5 space-y-4"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Admin WhatsApp</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    Number that receives low-stock Place / Cancel tickets.
+                  </p>
+                </div>
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  style={{
+                    background: whatsappConnected ? "rgba(74, 222, 128, 0.12)" : "var(--surface-elevated)",
+                    color: whatsappConnected ? "var(--green)" : "var(--text-muted)",
+                    border: "1px solid var(--border-subtle)",
+                  }}
+                >
+                  {whatsappConnected ? "Business API connected" : "Business API not connected"}
+                </span>
+              </div>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  Mobile number
+                </span>
+                <input
+                  type="tel"
+                  value={adminWhatsapp}
+                  onChange={(e) => {
+                    setAdminWhatsapp(e.target.value);
+                    if (adminWhatsappError) setAdminWhatsappError("");
+                  }}
+                  placeholder="10-digit Indian mobile"
+                  className="rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    border: `1px solid ${adminWhatsappError ? "var(--red)" : "var(--border)"}`,
+                    color: "var(--text-primary)",
+                  }}
+                />
+                {adminWhatsappError && (
+                  <p className="text-xs" style={{ color: "var(--red)" }}>
+                    {adminWhatsappError}
+                  </p>
+                )}
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {whatsappConnected
+                    ? "Low-stock order tickets will be sent to this number for Place or Cancel."
+                    : "Save the number now. No WhatsApp is sent until WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID are set, then the server is restarted."}
+                </p>
+              </label>
+            </div>
+
+            <div
+              className="rounded-xl p-5 space-y-4"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
             <p className="text-sm font-medium">Slippage Tolerance</p>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               Alert when bottle slippage exceeds this percentage on close.
@@ -451,6 +534,7 @@ export default function SettingsPage() {
                   </div>
                 );
               })}
+            </div>
             </div>
 
             {settingsMsg && (

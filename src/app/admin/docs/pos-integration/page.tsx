@@ -108,6 +108,36 @@ export default function PosIntegrationDocsPage() {
       </div>
 
       <div className="max-w-3xl space-y-6">
+        <Section title="Getting Started">
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            Short walkthroughs for setting up the venue and for storekeepers on shift.
+          </p>
+          <ul className="space-y-2 text-sm">
+            <li>
+              <a
+                href="https://youtu.be/ADOayH6KUXc"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+                style={{ color: "var(--accent)" }}
+              >
+                For first time setup
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://youtu.be/swNx49xjKJU"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+                style={{ color: "var(--accent)" }}
+              >
+                For storekeeper
+              </a>
+            </li>
+          </ul>
+        </Section>
+
         <Section title="Prerequisites">
           <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
             Before connecting your POS system, make sure you have the following ready:

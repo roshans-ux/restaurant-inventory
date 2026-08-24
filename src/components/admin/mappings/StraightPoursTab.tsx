@@ -114,12 +114,12 @@ function PosItemIdCell({
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="rounded px-1 py-0.5 text-left font-mono text-xs whitespace-normal break-all transition-opacity hover:opacity-80"
+      className="rounded-lg border border-transparent px-2 py-1.5 text-left font-mono text-xs whitespace-normal break-all transition-colors hover:border-[var(--accent)]"
       style={{
         color: configured ? "var(--text-secondary)" : "var(--text-muted)",
         fontStyle: configured ? "normal" : "italic",
+        background: "var(--surface)",
       }}
-      title={configured ? "Click to edit POS Item ID" : "Click to configure POS Item ID"}
     >
       {configured ? mapping.posItemId : "Not configured"}
     </button>

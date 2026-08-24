@@ -10,6 +10,7 @@ import {
   buildOrderTxt,
   txtFilename,
 } from "@/lib/vendor-messages";
+import { sendVendorOrder } from "@/lib/whatsapp/client";
 
 export async function GET(request: NextRequest) {
   const session = await requireApiSession(request);
@@ -137,6 +138,10 @@ export async function POST(request: NextRequest) {
           filename: txtFilename("order", vendor.name),
           content,
           vendorName: vendor.name,
+        });
+        await sendVendorOrder({
+          vendorWhatsappNumber: vendor.whatsappNumber,
+          body: content,
         });
       }
     } else {
