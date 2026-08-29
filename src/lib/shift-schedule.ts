@@ -1,3 +1,5 @@
+import { formatAppDate } from "@/lib/format-app-date";
+
 export const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 export type DayKey = (typeof DAY_KEYS)[number];
 
@@ -178,9 +180,5 @@ export function getShiftWindowForReport(
 }
 
 export function formatShiftDateLabel(date: Date, dayKey: DayKey): string {
-  return `${formatDayLabel(dayKey)} ${date.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  })}`;
+  return `${formatDayLabel(dayKey)} ${formatAppDate(date)}`;
 }

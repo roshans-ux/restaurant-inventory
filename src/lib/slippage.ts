@@ -1,5 +1,6 @@
 import { AlertType, BottleRotationStatus, StockMovementType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { formatBottleSizeLabel } from "@/lib/product-naming";
 
 export type SlippageResult = {
   slippageMl: number;
@@ -78,7 +79,7 @@ function buildSlippageAlertMessage(args: {
   bottleSizeMl: number;
   saleMlOrdered: number;
 }): string {
-  return `[${args.sku}] — Bottle [${args.barcodeId}] closed with ${args.slippageMl}ml slippage (${args.slippagePercent}%). Expected ${args.bottleSizeMl} orders worth of ml, got ${args.saleMlOrdered}ml.`;
+  return `[${args.sku}] (${formatBottleSizeLabel(args.bottleSizeMl)}) — Bottle [${args.barcodeId}] closed with ${args.slippageMl}ml slippage (${args.slippagePercent}%). Expected ${args.bottleSizeMl} orders worth of ml, got ${args.saleMlOrdered}ml.`;
 }
 
 export async function closeBottleRotation(rotationId: string, tenantId: string) {

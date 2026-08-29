@@ -11,6 +11,8 @@ import {
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { AlertType } from "@prisma/client";
+import { formatAppDateTime } from "@/lib/format-app-date";
+import { formatProductNameWithSize } from "@/lib/product-naming";
 
 type AlertItem = {
   id: string;
@@ -18,7 +20,7 @@ type AlertItem = {
   message: string;
   createdAt: string;
   readAt: string | null;
-  product: { name: string };
+  product: { name: string; bottleSizeMl: number | string };
 };
 
 type PanelPosition = {
@@ -51,6 +53,12 @@ function NotificationRow({
   const isSlippage = alert.type === AlertType.SLIPPAGE;
   const unread = alert.readAt == null;
   const accent = isSlippage ? "var(--red)" : "var(--accent)";
+  const sizedName = formatProductNameWithSize(alert.product.name, Number(alert.product.bottleSizeMl));
+  const displayMessage = alert.message.includes(sizedName)
+    ? alert.message
+    : alert.message.includes(alert.product.name)
+      ? alert.message.replace(alert.product.name, sizedName)
+      : alert.message;
 
   return (
     <div
@@ -84,7 +92,7 @@ function NotificationRow({
             className="text-sm font-semibold"
             style={{ color: "var(--text-primary)" }}
           >
-            {alert.product.name}
+            {sizedName}
           </span>
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
             {typeLabel(alert.type)}
@@ -94,10 +102,10 @@ function NotificationRow({
           className="mt-1 line-clamp-2 text-sm leading-snug"
           style={{ color: "var(--text-secondary)" }}
         >
-          {alert.message}
+          {displayMessage}
         </p>
         <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-          {new Date(alert.createdAt).toLocaleString()}
+          {formatAppDateTime(alert.createdAt)}
         </p>
       </div>
 

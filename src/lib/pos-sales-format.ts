@@ -1,4 +1,5 @@
 import { formatMappingSaleSize } from "@/lib/mapping-sale-size";
+import { formatAppDate } from "@/lib/format-app-date";
 
 export function formatSaleLabel(saleId: string) {
   if (saleId.startsWith("sim_")) {
@@ -9,11 +10,7 @@ export function formatSaleLabel(saleId: string) {
 }
 
 export function formatSaleDate(value: string) {
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatAppDate(value);
 }
 
 export function formatSaleTime(value: string) {

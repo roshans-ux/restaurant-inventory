@@ -6,6 +6,7 @@ import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
 import { useAdminSession } from "@/components/admin/AdminSessionContext";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import { buildCancelTxt, buildModifyTxt, buildOrderTxt } from "@/lib/vendor-messages";
+import { formatAppDate } from "@/lib/format-app-date";
 
 type Tab = "all" | "pending" | "placed" | "cancelled";
 type SortField = "product" | "qty" | "status" | "vendor" | "created" | "placed";
@@ -598,10 +599,10 @@ export default function StockOrdersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
-                      {o.placedAt ? new Date(o.placedAt).toLocaleDateString() : "—"}
+                      {o.placedAt ? formatAppDate(o.placedAt) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
-                      {new Date(o.createdAt).toLocaleDateString()}
+                      {formatAppDate(o.createdAt)}
                     </td>
                     {!readOnly && (
                       <td className="px-4 py-3 text-right">

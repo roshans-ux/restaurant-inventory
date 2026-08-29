@@ -27,6 +27,10 @@ export function formatBottleSizeLabel(ml: number): string {
   return match?.label ?? `${ml}ml`;
 }
 
+export function formatProductNameWithSize(name: string, bottleSizeMl: number): string {
+  return `${name} (${formatBottleSizeLabel(Number(bottleSizeMl))})`;
+}
+
 export function normalizeBottleName(name: string) {
   return name.trim().replace(/\s+/g, " ").toLowerCase();
 }

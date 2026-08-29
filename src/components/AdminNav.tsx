@@ -28,16 +28,16 @@ const links = [
     exact: true,
   },
   {
+    href: "/admin/products",
+    label: "Bottles",
+    description: "Add SKUs, bottle sizes, par levels, and vendors",
+    icon: Wine,
+  },
+  {
     href: "/admin/stock",
     label: "Stock Entry",
     description: "Receive stock, log broken or returned bottles",
     icon: PackagePlus,
-  },
-  {
-    href: "/admin/handover",
-    label: "Bottle Handover",
-    description: "Scan bottles as you open them for the shift",
-    icon: ArrowRightLeft,
   },
   {
     href: "/admin/stock-orders",
@@ -46,10 +46,10 @@ const links = [
     icon: ClipboardList,
   },
   {
-    href: "/admin/products",
-    label: "Bottles",
-    description: "Add SKUs, bottle sizes, par levels, and vendors",
-    icon: Wine,
+    href: "/admin/handover",
+    label: "Bottle Handover",
+    description: "Scan bottles as you open them for the shift",
+    icon: ArrowRightLeft,
   },
   {
     href: "/admin/mappings",
@@ -131,22 +131,17 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
           <Link
             href="/"
             className="flex min-w-0 flex-1 items-center gap-2 transition-opacity hover:opacity-90"
-            title="Go to home"
+            aria-label="Go to home"
           >
-            <span className="text-lg shrink-0" role="img" aria-label="bar">
+            <span className="text-lg shrink-0" role="img" aria-hidden>
               🍶
             </span>
-            <div className="min-w-0">
-              <span
-                className="block truncate text-sm font-semibold tracking-tight"
-                style={{ color: "var(--text-primary)" }}
-              >
-                {venueName ?? "My Restaurant"}
-              </span>
-              <span className="block truncate text-xs" style={{ color: "var(--text-muted)" }}>
-                Bar Tally · Go to home
-              </span>
-            </div>
+            <span
+              className="block min-w-0 truncate text-sm font-semibold tracking-tight"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {venueName ?? "My Restaurant"}
+            </span>
           </Link>
           <button
             ref={bellRef}
@@ -178,7 +173,9 @@ export default function AdminNav({ authPaused = false }: { authPaused?: boolean 
 
         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {links.map(({ href, label, description, icon: Icon, exact }) => {
-            const active = exact ? pathname === href : pathname.startsWith(href);
+            const active = exact
+              ? pathname === href
+              : pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
                 key={href}

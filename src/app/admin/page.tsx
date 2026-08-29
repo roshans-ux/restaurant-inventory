@@ -12,6 +12,7 @@ import { formatBottleStock } from "@/lib/format-bottles";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import { shiftReportFilename } from "@/lib/shift-report-filename";
 import { todayDateParam } from "@/lib/sales-period";
+import { formatAppDateTime } from "@/lib/format-app-date";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
 
 type Level = {
@@ -393,7 +394,20 @@ export default function Dashboard() {
         </div>
       )}
 
-      <TopSellingSkusChart />
+      <section className="mb-8 grid items-stretch gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
+          <TopSellingSkusChart />
+        </div>
+        <div className="min-w-0">
+          <StockActivityTable
+            activity={activity}
+            variant="preview"
+            limit={5}
+            viewAllHref="/admin/stock"
+            viewAllLabel="View all activity"
+          />
+        </div>
+      </section>
 
       {loading ? (
         <>
@@ -457,7 +471,7 @@ export default function Dashboard() {
                         minimum required {l.thresholdBottles === 1 ? "bottle" : "bottles"} in stock
                         {lowAlert && (
                           <span className="mt-0.5 block text-xs" style={{ color: "var(--text-muted)" }}>
-                            Low since {new Date(lowAlert.createdAt).toLocaleString()}
+                            Low since {formatAppDateTime(lowAlert.createdAt)}
                           </span>
                         )}
                       </span>
@@ -559,20 +573,13 @@ export default function Dashboard() {
             )}
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section>
             <RecentSalesTable
               sales={recentSales}
               limit={5}
               sortable
               viewAllHref="/admin/pos-sim"
               viewAllLabel="View all orders"
-            />
-            <StockActivityTable
-              activity={activity}
-              variant="preview"
-              limit={5}
-              viewAllHref="/admin/stock"
-              viewAllLabel="View all activity"
             />
           </section>
 

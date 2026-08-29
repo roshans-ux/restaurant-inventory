@@ -1,24 +1,17 @@
 import type { Metadata } from "next";
-import { Alegreya_Sans, Archivo, EB_Garamond, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
-const fontDisplay = EB_Garamond({
+const fontDisplay = Bricolage_Grotesque({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
+  weight: ["400", "600", "700"],
   variable: "--font-family-display",
 });
 
-const fontBody = Alegreya_Sans({
+const fontBody = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["400", "500", "600"],
   variable: "--font-family-body",
-});
-
-const fontGrotesk = Archivo({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-  variable: "--font-family-grotesk",
 });
 
 const geistMono = Geist_Mono({
@@ -43,7 +36,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${fontDisplay.variable} ${fontBody.variable} ${fontGrotesk.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${fontDisplay.variable} ${fontBody.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
         {children}

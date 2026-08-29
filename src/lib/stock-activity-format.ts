@@ -1,3 +1,5 @@
+import { formatAppDate } from "@/lib/format-app-date";
+
 export function activityTypeLabel(type: string) {
   if (type === "RECEIVE") return "Receive stock";
   if (type === "ADJUSTMENT") return "Adjustment";
@@ -5,11 +7,7 @@ export function activityTypeLabel(type: string) {
 }
 
 export function formatActivityDate(value: string) {
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatAppDate(value);
 }
 
 export function formatActivityTime(value: string) {

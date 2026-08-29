@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Info, RotateCcw } from "lucide-react";
 import BottleSelectDropdown from "@/components/admin/BottleSelectDropdown";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
+import { formatAppDateTime } from "@/lib/format-app-date";
 import { isBeerBottleSize } from "@/lib/product-naming";
 
 type Product = {
@@ -325,7 +326,7 @@ export default function HandoverPage() {
                         <td className="px-4 py-3 font-medium">{r.productName}</td>
                         <td className="px-4 py-3 font-mono text-xs">{r.barcodeId}</td>
                         <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                          {new Date(r.openedAt).toLocaleString()}
+                          {formatAppDateTime(r.openedAt)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">{r.mlRemaining}ml</td>
                         <td className="px-4 py-3 text-right">

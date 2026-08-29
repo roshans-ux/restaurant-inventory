@@ -12,9 +12,9 @@ html:has(.landing-root) {
   --lp-line: rgba(13, 13, 15, 0.12);
   --lp-accent: var(--accent);
   --lp-accent-soft: rgba(245, 166, 35, 0.14);
-  --lp-serif: var(--font-family-display), "EB Garamond", Georgia, serif;
-  --lp-sans: var(--font-family-body), "Alegreya Sans", system-ui, sans-serif;
-  --lp-grotesk: var(--font-family-grotesk), "Archivo", system-ui, sans-serif;
+  --lp-serif: var(--font-family-display), "Bricolage Grotesque", system-ui, sans-serif;
+  --lp-sans: var(--font-family-body), Inter, system-ui, sans-serif;
+  --lp-grotesk: var(--font-family-grotesk), "Bricolage Grotesque", system-ui, sans-serif;
   --lp-gutter: 2rem;
   --lp-nav-h: 4.25rem;
 

@@ -3,6 +3,7 @@ import { AlertType, StockMovementType } from "@prisma/client";
 import { formatBottleStock } from "@/lib/format-bottles";
 import { prisma } from "@/lib/prisma";
 import { maybeCreatePendingStockOrder } from "@/lib/stock-orders";
+import { formatProductNameWithSize } from "@/lib/product-naming";
 
 export const DEFAULT_BOTTLE_SIZE_ML = 750;
 export const STANDARD_POUR_ML = 30;
@@ -94,7 +95,7 @@ export async function syncLowStockAlerts(productId: string): Promise<void> {
     data: {
       productId,
       type: AlertType.LOW_STOCK,
-      message: `${config.product.name} is below threshold at ${stockLabel}`,
+      message: `${formatProductNameWithSize(config.product.name, bottleSizeMl)} is below threshold at ${stockLabel}`,
     },
   });
 

@@ -10,6 +10,7 @@ import {
   todayDayKey,
 } from "@/lib/shift-schedule";
 import { finalizeShiftReportIfDue } from "@/lib/shift-report-run";
+import { formatAppDateTime } from "@/lib/format-app-date";
 
 export async function GET(request: NextRequest) {
   const session = await requireApiSession(request);
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     if (tenant.shiftReportReadyAt) {
       phase = "ready";
-      banner = `Shift report is generated and ready to download - ${tenant.shiftReportReadyAt.toLocaleString()}`;
+      banner = `Shift report is generated and ready to download - ${formatAppDateTime(tenant.shiftReportReadyAt)}`;
       downloadEnabled = true;
     } else if (tenant.shiftReportScheduledAt && now < tenant.shiftReportScheduledAt) {
       phase = "scheduled";
