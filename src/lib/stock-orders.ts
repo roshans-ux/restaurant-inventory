@@ -2,6 +2,7 @@ import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStockMl, isBelowThreshold } from "@/lib/inventory";
 import { sendAdminReorderPrompt } from "@/lib/whatsapp/client";
+import { appendStockOrderLog } from "@/lib/stock-order-log";
 
 export type PendingStockOrderContext = {
   currentMl: number;
@@ -30,7 +31,7 @@ export async function maybeCreatePendingStockOrder(
   ) {
     const config = await prisma.reorderConfig.findUnique({
       where: { productId },
-      include: { product: true },
+      include: { product: { include: { vendors: { select: { id: true } } } } },
     });
     if (!config) return;
     if (config.product.tenantId !== tenantId) return;
@@ -38,7 +39,7 @@ export async function maybeCreatePendingStockOrder(
     bottleSizeMl = Number(config.product.bottleSizeMl);
     thresholdBottles = Number(config.thresholdBottles);
     reorderQuantity = config.reorderQuantity;
-    vendorId = config.product.vendorId;
+    vendorId = config.product.vendorId ?? config.product.vendors[0]?.id ?? null;
     currentMl = await getCurrentStockMl(productId);
   }
 
@@ -67,6 +68,12 @@ export async function maybeCreatePendingStockOrder(
       tenant: { select: { name: true, adminWhatsappNumber: true } },
     },
   });
+
+  await appendStockOrderLog(
+    prisma,
+    order.id,
+    "Order created automatically (stock below threshold)",
+  );
 
   try {
     await sendAdminReorderPrompt({

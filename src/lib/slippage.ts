@@ -61,13 +61,15 @@ export async function sumSaleMlForRotationsInWindow(
   return { soldMl: total, hadRotation: true };
 }
 
+/** Positive ml = overpour (ordered below size); negative = underpour (ordered above size). */
 export function calculateSlippage(
   bottleSizeMl: number,
   saleMlOrdered: number,
 ): SlippageResult {
-  const slippageMl = Math.max(0, bottleSizeMl - saleMlOrdered);
+  const slippageMl = bottleSizeMl - saleMlOrdered;
+  const absMl = Math.abs(slippageMl);
   const slippagePercent =
-    bottleSizeMl > 0 ? Math.round((slippageMl / bottleSizeMl) * 1000) / 10 : 0;
+    bottleSizeMl > 0 ? Math.round((absMl / bottleSizeMl) * 1000) / 10 : 0;
   return { slippageMl, slippagePercent };
 }
 
@@ -79,7 +81,13 @@ function buildSlippageAlertMessage(args: {
   bottleSizeMl: number;
   saleMlOrdered: number;
 }): string {
-  return `[${args.sku}] (${formatBottleSizeLabel(args.bottleSizeMl)}) — Bottle [${args.barcodeId}] closed with ${args.slippageMl}ml slippage (${args.slippagePercent}%). Expected ${args.bottleSizeMl} orders worth of ml, got ${args.saleMlOrdered}ml.`;
+  const absMl = Math.abs(args.slippageMl);
+  const sizeLabel = formatBottleSizeLabel(args.bottleSizeMl);
+  const skuPart = `[${args.sku}] (${sizeLabel})`;
+  if (args.slippageMl < 0) {
+    return `UNDERPOUR: ${skuPart} — Bottle [${args.barcodeId}] closed with ${absMl}ml underpour (${args.slippagePercent}%). Expected ${args.bottleSizeMl}ml worth of orders, got ${args.saleMlOrdered}ml. Bartender may be underpouring.`;
+  }
+  return `OVERPOUR: ${skuPart} — Bottle [${args.barcodeId}] closed with ${absMl}ml overpour (${args.slippagePercent}%). Expected ${args.bottleSizeMl}ml worth of orders, got ${args.saleMlOrdered}ml. Bartender may be overpouring.`;
 }
 
 export async function closeBottleRotation(rotationId: string, tenantId: string) {

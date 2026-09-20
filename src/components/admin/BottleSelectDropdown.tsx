@@ -3,12 +3,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import { ProductCategory } from "@prisma/client";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
+import CategoryPill from "@/components/admin/CategoryPill";
 
 type BottleProduct = {
   id: string;
   name: string;
   bottleSizeMl: string | number;
+  category?: ProductCategory;
+  vendors?: { id: string; name: string }[];
 };
 
 type BottleSelectDropdownProps = {
@@ -162,13 +166,23 @@ export default function BottleSelectDropdown({
                 key={p.id}
                 type="button"
                 onClick={() => selectProduct(p.id)}
-                className="block w-full px-3 py-2 text-left text-sm transition-colors"
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors"
                 style={{
                   color: "var(--text-primary)",
                   background: p.id === value ? "var(--accent-dim)" : "transparent",
                 }}
               >
-                {p.name} ({formatBottleSizeLabel(Number(p.bottleSizeMl))})
+                <span className="min-w-0">
+                  <span className="block">
+                    {p.name} ({formatBottleSizeLabel(Number(p.bottleSizeMl))})
+                  </span>
+                  {p.vendors && p.vendors.length > 0 ? (
+                    <span className="mt-0.5 block text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      {p.vendors.map((v) => v.name).join(", ")}
+                    </span>
+                  ) : null}
+                </span>
+                {p.category ? <CategoryPill category={p.category} /> : null}
               </button>
             ))
           )}

@@ -54,6 +54,8 @@ export async function GET(request: NextRequest) {
 const createSchema = z.object({
   name: z.string().min(1),
   whatsappNumber: z.string().min(5),
+  creditPeriodDays: z.number().int().min(0).nullable().optional(),
+  email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -73,6 +75,8 @@ export async function POST(request: NextRequest) {
         tenantId: session.tenantId,
         name: payload.name.trim(),
         whatsappNumber,
+        creditPeriodDays: payload.creditPeriodDays ?? null,
+        email: payload.email?.trim() ? payload.email.trim() : null,
       },
     });
     revalidateTag("vendors", { expire: 0 });

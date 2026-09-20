@@ -6,6 +6,7 @@ import { isSession, requireApiSession } from "@/lib/auth/require-session";
 
 const bodySchema = z.object({
   alertIds: z.array(z.string().uuid()).optional(),
+  unread: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -14,8 +15,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = bodySchema.parse(await request.json().catch(() => ({})));
-    const now = new Date();
 
+    if (payload.unread) {
+      if (!payload.alertIds?.length) {
+        return apiError("INVALID_REQUEST", "alertIds required to mark unread", 400);
+      }
+      const result = await prisma.alert.updateMany({
+        where: {
+          resolvedAt: null,
+          readAt: { not: null },
+          product: { tenantId: session.tenantId },
+          id: { in: payload.alertIds },
+        },
+        data: { readAt: null },
+      });
+      return apiOk({ markedUnread: result.count });
+    }
+
+    const now = new Date();
     const where = {
       resolvedAt: null,
       readAt: null,

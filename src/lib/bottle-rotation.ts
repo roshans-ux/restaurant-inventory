@@ -2,6 +2,7 @@ import { BottleRotationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { closeBottleRotation } from "@/lib/slippage";
 import { findProductForTenant } from "@/lib/tenant";
+import { isHandoverCategory } from "@/lib/product-category";
 
 export async function openRotation(
   tenantId: string,
@@ -11,6 +12,9 @@ export async function openRotation(
   const product = await findProductForTenant(tenantId, productId);
   if (!product) {
     throw new Error("Product not found");
+  }
+  if (!isHandoverCategory(product.category)) {
+    throw new Error("Bottled beers and ciders are sold whole and are not scanned into rotation");
   }
 
   const trimmedBarcode = barcodeId.trim();

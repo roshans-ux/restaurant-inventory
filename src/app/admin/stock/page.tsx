@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent, useCallback, useMemo } from "react";
 import { PackagePlus, Minus, ChevronDown } from "lucide-react";
 import AddBottleModal from "@/components/admin/AddBottleModal";
 import BottleSelectDropdown from "@/components/admin/BottleSelectDropdown";
+import VendorMultiSelect from "@/components/admin/VendorMultiSelect";
 import StockActivityTable from "@/components/admin/StockActivityTable";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/lib/bottle-broken-display";
 import { formatBottleStock, formatQuartersAndMl } from "@/lib/format-bottles";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
+import { ProductCategory } from "@prisma/client";
 
 const POUR_ML = 30;
 const ENABLE_POUR_VARIANCE_ADJUSTMENTS = false;
@@ -22,6 +24,8 @@ type Product = {
   name: string;
   sku: string | null;
   bottleSizeMl: string;
+  category?: ProductCategory;
+  vendors?: { id: string; name: string }[];
 };
 
 type StockLevel = {
@@ -148,6 +152,10 @@ export default function StockPage() {
   const [bottlesToReturn, setBottlesToReturn] = useState(0);
   const [variancePours, setVariancePours] = useState(1);
   const [receiveQty, setReceiveQty] = useState(1);
+  const [receiveVendorIds, setReceiveVendorIds] = useState<string[]>([]);
+  const [fulfilmentDate, setFulfilmentDate] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
+  );
   const [saving, setSaving] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -261,6 +269,15 @@ export default function StockPage() {
   ];
 
   useEffect(() => {
+    const assigned = selectedProduct?.vendors ?? [];
+    if (assigned.length === 1) {
+      setReceiveVendorIds([assigned[0].id]);
+    } else {
+      setReceiveVendorIds((prev) => prev.filter((id) => assigned.some((v) => v.id === id)));
+    }
+  }, [productId, selectedProduct]);
+
+  useEffect(() => {
     if (!productId) return;
     setBottlesToReturn(0);
     const steps = getBottleBrokenMlSteps(bottleSizeMl).filter((ml) => ml <= maxRemainingMl);
@@ -299,6 +316,15 @@ export default function StockPage() {
       let request: Promise<Response>;
 
       if (mode === "receive") {
+        if (receiveVendorIds.length === 0) {
+          throw new Error("Select a vendor");
+        }
+        if (receiveVendorIds.length > 1) {
+          throw new Error("Create a separate receive entry for each vendor");
+        }
+        if (!fulfilmentDate) {
+          throw new Error("Select an order fulfilment date");
+        }
         optimisticDelta = Math.round(receiveQty * bottleSizeMl);
         request = fetch("/api/inventory/receive", {
           method: "POST",
@@ -306,6 +332,8 @@ export default function StockPage() {
           body: JSON.stringify({
             productId,
             quantityBottles: receiveQty,
+            vendorId: receiveVendorIds[0],
+            fulfilmentDate,
           }),
         });
       } else {
@@ -535,6 +563,39 @@ export default function StockPage() {
             </label>
 
             {mode === "receive" && (
+              <>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  Vendor
+                </span>
+                <VendorMultiSelect
+                  vendors={selectedProduct?.vendors ?? []}
+                  selectedIds={receiveVendorIds}
+                  onChange={setReceiveVendorIds}
+                  placeholder="Select vendor…"
+                  required
+                />
+                <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  One vendor per receive entry. If two vendors supply this SKU, create two entries.
+                </span>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  Order Fulfilment Date
+                </span>
+                <input
+                  type="date"
+                  required
+                  value={fulfilmentDate}
+                  onChange={(e) => setFulfilmentDate(e.target.value)}
+                  className="rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
                   Quantity (bottles)
@@ -554,6 +615,7 @@ export default function StockPage() {
                   }}
                 />
               </label>
+              </>
             )}
 
             {mode === "adjust" && (

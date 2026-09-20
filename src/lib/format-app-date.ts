@@ -50,3 +50,38 @@ export function formatAppDateTime(value: Date | string | number): string {
   });
   return `${formatAppDate(date)}, ${time}`;
 }
+
+const IST = "Asia/Kolkata";
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
+/** e.g. 29-Aug-26 02:30 PM IST */
+export function formatIstLogStamp(value: Date | string | number): string {
+  const date = toDate(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: IST,
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  const monthRaw = get("month");
+  const month =
+    SHORT_MONTHS.find((m) => monthRaw.toLowerCase().startsWith(m.toLowerCase())) ?? monthRaw.slice(0, 3);
+  const day = get("day");
+  const year = get("year");
+  const hour = get("hour");
+  const minute = get("minute");
+  const dayPeriod = get("dayPeriod").toUpperCase();
+  return `${day}-${month}-${year} ${hour}:${minute} ${dayPeriod} IST`;
+}
+
+/** e.g. 29-Aug-26 */
+export function formatIstDate(value: Date | string | number): string {
+  const stamp = formatIstLogStamp(value);
+  if (stamp === "—") return "—";
+  return stamp.split(" ")[0] ?? stamp;
+}

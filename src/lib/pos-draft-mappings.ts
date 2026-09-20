@@ -1,11 +1,9 @@
-import { Prisma } from "@prisma/client";
-import { FIXED_POUR_OPTIONS_ML } from "@/lib/mapping-sale-size";
+import { Prisma, ProductCategory } from "@prisma/client";
+import { draftPourSizesForCategory, isFullUnitSaleCategory } from "@/lib/product-category";
 import {
-  draftPourSizesForBottle,
   draftSuppressedPosItemId,
   isDraftSuppressedPosItemId,
 } from "@/lib/pos-mapping-utils";
-import { isBeerBottleSize } from "@/lib/product-naming";
 import { prisma } from "@/lib/prisma";
 
 type Db = Pick<Prisma.TransactionClient, "posMenuMapping">;
@@ -34,8 +32,9 @@ export async function ensureDraftMappingsForProduct(
   tenantId: string,
   productId: string,
   bottleSizeMl: number,
+  category: ProductCategory,
 ) {
-  const pourSizes = draftPourSizesForBottle(bottleSizeMl);
+  const pourSizes = draftPourSizesForCategory(category, bottleSizeMl);
   const existing = await db.posMenuMapping.findMany({
     where: { tenantId, productId },
   });
@@ -51,8 +50,7 @@ export async function ensureDraftMappingsForProduct(
       continue;
     }
     if (isDraftSuppressedPosItemId(row.posItemId)) {
-      // Keep beer full-bottle deletions; don't revive the slot on the next sync.
-      if (isBeerBottleSize(bottleSizeMl) && pourMl === bottleSizeMl) {
+      if (isFullUnitSaleCategory(category) && pourMl === bottleSizeMl) {
         continue;
       }
       unsuppressIds.push(row.id);
@@ -98,7 +96,7 @@ export async function recordDeletedMappingSlot(
 export async function syncDraftMappingsForTenant(tenantId: string) {
   const products = await prisma.product.findMany({
     where: { tenantId },
-    select: { id: true, bottleSizeMl: true },
+    select: { id: true, bottleSizeMl: true, category: true },
   });
 
   const concurrency = 5;
@@ -108,10 +106,22 @@ export async function syncDraftMappingsForTenant(tenantId: string) {
       batch.map(async (product) => {
         const bottleSizeMl = Number(product.bottleSizeMl);
         try {
-          if (isBeerBottleSize(bottleSizeMl)) {
-            await reconcileBeerProductMappings(prisma, tenantId, product.id, bottleSizeMl);
+          if (isFullUnitSaleCategory(product.category)) {
+            await reconcileFullUnitSaleMappings(
+              prisma,
+              tenantId,
+              product.id,
+              bottleSizeMl,
+              product.category,
+            );
           } else {
-            await ensureDraftMappingsForProduct(prisma, tenantId, product.id, bottleSizeMl);
+            await ensureDraftMappingsForProduct(
+              prisma,
+              tenantId,
+              product.id,
+              bottleSizeMl,
+              product.category,
+            );
           }
         } catch (error) {
           console.error(
@@ -131,6 +141,7 @@ export async function updateFullBottleDraftPourSize(
   productId: string,
   previousBottleSizeMl: number,
   nextBottleSizeMl: number,
+  category: ProductCategory,
 ) {
   if (previousBottleSizeMl === nextBottleSizeMl) return;
 
@@ -160,20 +171,21 @@ export async function updateFullBottleDraftPourSize(
     }
   }
 
-  if (isBeerBottleSize(nextBottleSizeMl)) {
-    await reconcileBeerProductMappings(db, tenantId, productId, nextBottleSizeMl);
+  if (isFullUnitSaleCategory(category)) {
+    await reconcileFullUnitSaleMappings(db, tenantId, productId, nextBottleSizeMl, category);
   } else {
-    await ensureDraftMappingsForProduct(db, tenantId, productId, nextBottleSizeMl);
+    await ensureDraftMappingsForProduct(db, tenantId, productId, nextBottleSizeMl, category);
   }
 }
 
-export async function reconcileBeerProductMappings(
+export async function reconcileFullUnitSaleMappings(
   db: Db,
   tenantId: string,
   productId: string,
   bottleSizeMl: number,
+  category: ProductCategory,
 ) {
-  if (!isBeerBottleSize(bottleSizeMl)) return;
+  if (!isFullUnitSaleCategory(category)) return;
 
   const mappings = await db.posMenuMapping.findMany({
     where: { tenantId, productId },
@@ -185,9 +197,25 @@ export async function reconcileBeerProductMappings(
     }
   }
 
-  for (const pourMl of FIXED_POUR_OPTIONS_ML) {
+  for (const pourMl of [30, 60, 90, 120]) {
     await recordDeletedMappingSlot(db, tenantId, productId, pourMl);
   }
 
-  await ensureDraftMappingsForProduct(db, tenantId, productId, bottleSizeMl);
+  await ensureDraftMappingsForProduct(db, tenantId, productId, bottleSizeMl, category);
+}
+
+/** @deprecated Use reconcileFullUnitSaleMappings */
+export async function reconcileBeerProductMappings(
+  db: Db,
+  tenantId: string,
+  productId: string,
+  bottleSizeMl: number,
+) {
+  await reconcileFullUnitSaleMappings(
+    db,
+    tenantId,
+    productId,
+    bottleSizeMl,
+    ProductCategory.BOTTLED_BEER,
+  );
 }

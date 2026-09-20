@@ -8,33 +8,46 @@ import { apiError } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import {
-  ALLOWED_BOTTLE_SIZE_ML,
   DUPLICATE_BOTTLE_NAME_SIZE_MESSAGE,
   normalizeBottleName,
   skuFromNameAndSize,
 } from "@/lib/product-naming";
-import { ensureDraftMappingsForProduct, reconcileBeerProductMappings } from "@/lib/pos-draft-mappings";
-import { isBeerBottleSize } from "@/lib/product-naming";
+import {
+  defaultPourMlForCategory,
+  isFullUnitSaleCategory,
+  isValidSizeForCategory,
+} from "@/lib/product-category";
+import { ensureDraftMappingsForProduct, reconcileFullUnitSaleMappings } from "@/lib/pos-draft-mappings";
+import { filterTenantVendorIds } from "@/lib/tenant-vendors";
 
-const productSchema = z.object({
-  name: z.string().min(2),
-  sku: z.string().optional(),
-  bottleSizeMl: z
-    .number()
-    .refine((n) => (ALLOWED_BOTTLE_SIZE_ML as readonly number[]).includes(n), "Invalid bottle size")
-    .default(DEFAULT_BOTTLE_SIZE_ML),
-  defaultPourMl: z.number().positive().default(30),
-  openingBottles: z.number().min(0).default(0),
-  thresholdBottles: z.number().int().min(0).default(1),
-  reorderQuantity: z.number().int().positive().default(6),
-  vendorId: z.string().uuid().nullable().optional(),
-});
+const productSchema = z
+  .object({
+    name: z.string().min(2),
+    sku: z.string().optional(),
+    category: z.enum(["SPIRIT", "WINE", "BOTTLED_BEER", "DRAFT_BEER", "CIDER"]),
+    bottleSizeMl: z.number().positive().default(DEFAULT_BOTTLE_SIZE_ML),
+    defaultPourMl: z.number().positive().optional(),
+    openingBottles: z.number().min(0).default(0),
+    thresholdBottles: z.number().int().min(0).default(1),
+    reorderQuantity: z.number().int().positive().default(6),
+    vendorId: z.string().uuid().nullable().optional(),
+    vendorIds: z.array(z.string().uuid()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!isValidSizeForCategory(data.category, data.bottleSizeMl)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid bottle size for category",
+        path: ["bottleSizeMl"],
+      });
+    }
+  });
 
 const getCachedProducts = unstable_cache(
   async (tenantId: string) =>
     prisma.product.findMany({
       where: { tenantId },
-      include: { reorderConfig: true, vendor: true },
+      include: { reorderConfig: true, vendor: true, vendors: { select: { id: true, name: true } } },
       orderBy: { name: "asc" },
     }),
   ["products"],
@@ -64,6 +77,10 @@ export async function POST(request: NextRequest) {
   try {
     const json = await request.json();
     const parsed = productSchema.parse(json);
+    const vendorIds = await filterTenantVendorIds(
+      session.tenantId,
+      parsed.vendorIds ?? (parsed.vendorId ? [parsed.vendorId] : []),
+    );
 
     const result = await prisma.$transaction(async (tx) => {
       const normalizedName = normalizeBottleName(parsed.name);
@@ -100,11 +117,19 @@ export async function POST(request: NextRequest) {
           tenantId: session.tenantId,
           name: parsed.name.trim().replace(/\s+/g, " "),
           sku: finalSku,
+          category: parsed.category,
           bottleSizeMl: parsed.bottleSizeMl,
-          defaultPourMl: isBeerBottleSize(parsed.bottleSizeMl)
+          defaultPourMl: isFullUnitSaleCategory(parsed.category)
             ? parsed.bottleSizeMl
-            : parsed.defaultPourMl,
-          vendorId: parsed.vendorId ?? null,
+            : (parsed.defaultPourMl ??
+              defaultPourMlForCategory(parsed.category, parsed.bottleSizeMl)),
+          vendorId: vendorIds[0] ?? null,
+          vendors:
+            vendorIds.length > 0 ? { connect: vendorIds.map((id) => ({ id })) } : undefined,
+        },
+        include: {
+          reorderConfig: true,
+          vendors: { select: { id: true, name: true } },
         },
       });
 
@@ -134,12 +159,13 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (isBeerBottleSize(parsed.bottleSizeMl)) {
-        await reconcileBeerProductMappings(
+      if (isFullUnitSaleCategory(parsed.category)) {
+        await reconcileFullUnitSaleMappings(
           tx,
           session.tenantId,
           product.id,
           parsed.bottleSizeMl,
+          parsed.category,
         );
       } else {
         await ensureDraftMappingsForProduct(
@@ -147,6 +173,7 @@ export async function POST(request: NextRequest) {
           session.tenantId,
           product.id,
           parsed.bottleSizeMl,
+          parsed.category,
         );
       }
 

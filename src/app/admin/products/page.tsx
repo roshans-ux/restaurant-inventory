@@ -3,15 +3,21 @@
 import { useEffect, useState, FormEvent, useCallback, useRef, useMemo } from "react";
 import { Plus, Wine, ChevronDown, Trash2 } from "lucide-react";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
+import { ProductCategory } from "@prisma/client";
+import CategoryPill from "@/components/admin/CategoryPill";
+import VendorMultiSelect from "@/components/admin/VendorMultiSelect";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import {
-  BOTTLE_SIZE_OPTIONS,
   DUPLICATE_BOTTLE_NAME_SIZE_MESSAGE,
   formatBottleSizeLabel,
   isSameBottleNameAndSize,
-  normalizeBottleSizeMl,
   skuFromNameAndSize,
 } from "@/lib/product-naming";
+import {
+  PRODUCT_CATEGORIES,
+  PRODUCT_CATEGORY_LABELS,
+  bottleSizeOptionsForCategory,
+} from "@/lib/product-category";
 
 type ProductSortField = "name" | "sku" | "bottleSize" | "threshold";
 type SortDirection = "asc" | "desc";
@@ -20,9 +26,11 @@ type Product = {
   id: string;
   name: string;
   sku: string | null;
+  category: ProductCategory;
   bottleSizeMl: string;
   defaultPourMl: string;
   vendorId: string | null;
+  vendors?: { id: string; name: string }[];
   reorderConfig?: {
     thresholdBottles: string;
     reorderQuantity: number;
@@ -44,10 +52,11 @@ export default function ProductsPage() {
   const [nameInput, setNameInput] = useState("");
   const [skuInput, setSkuInput] = useState("");
   const [skuManualOverride, setSkuManualOverride] = useState(false);
+  const [categoryInput, setCategoryInput] = useState<ProductCategory>(ProductCategory.SPIRIT);
   const [bottleSizeInput, setBottleSizeInput] = useState("750");
   const [thresholdInput, setThresholdInput] = useState("1");
   const [reorderQtyInput, setReorderQtyInput] = useState("6");
-  const [vendorIdInput, setVendorIdInput] = useState("");
+  const [vendorIdsInput, setVendorIdsInput] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -55,10 +64,20 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [sortField, setSortField] = useState<ProductSortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [categoryFilter, setCategoryFilter] = useState<ProductCategory | "ALL">("ALL");
   const deleteConfirmRef = useRef<HTMLButtonElement | null>(null);
 
+  const sizeOptions = useMemo(
+    () => bottleSizeOptionsForCategory(categoryInput, Number(bottleSizeInput)),
+    [categoryInput, bottleSizeInput],
+  );
+
   const visibleProducts = useMemo(() => {
-    return [...products].sort((a, b) => {
+    const filtered =
+      categoryFilter === "ALL"
+        ? products
+        : products.filter((p) => p.category === categoryFilter);
+    return [...filtered].sort((a, b) => {
       let compare = 0;
       if (sortField === "name") {
         compare = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
@@ -73,7 +92,7 @@ export default function ProductsPage() {
       }
       return sortDirection === "asc" ? compare : -compare;
     });
-  }, [products, sortDirection, sortField]);
+  }, [products, sortDirection, sortField, categoryFilter]);
 
   function onSort(field: ProductSortField) {
     if (sortField === field) {
@@ -186,11 +205,12 @@ export default function ProductsPage() {
         body: JSON.stringify({
           name: nameInput,
           sku: skuInput || undefined,
+          category: categoryInput,
           bottleSizeMl: Number(bottleSizeInput),
           openingBottles: 0,
           thresholdBottles: Math.max(0, Math.round(Number(thresholdInput) || 0)),
           reorderQuantity: Math.max(1, Math.round(Number(reorderQtyInput) || 6)),
-          vendorId: vendorIdInput || null,
+          vendorIds: vendorIdsInput,
         }),
       });
 
@@ -236,10 +256,11 @@ export default function ProductsPage() {
       setNameInput("");
       setSkuInput("");
       setSkuManualOverride(false);
+      setCategoryInput(ProductCategory.SPIRIT);
       setBottleSizeInput("750");
       setThresholdInput("1");
       setReorderQtyInput("6");
-      setVendorIdInput("");
+      setVendorIdsInput([]);
       setSuggestions([]);
       setShowForm(false);
     } catch (err) {
@@ -308,10 +329,11 @@ export default function ProductsPage() {
   }
 
   function loadIntoForm(product: Product) {
-    const size = normalizeBottleSizeMl(Number(product.bottleSizeMl));
+    const size = Number(product.bottleSizeMl);
     const suggested = skuFromNameAndSize(product.name, size);
     setEditingProductId(product.id);
     setNameInput(product.name);
+    setCategoryInput(product.category ?? ProductCategory.SPIRIT);
     setBottleSizeInput(String(size));
     const existingSku = product.sku ?? "";
     const manual = Boolean(existingSku && existingSku.toUpperCase() !== suggested.toUpperCase());
@@ -325,7 +347,9 @@ export default function ProductsPage() {
     setReorderQtyInput(
       product.reorderConfig ? String(product.reorderConfig.reorderQuantity) : "6",
     );
-    setVendorIdInput(product.vendorId ?? "");
+    setVendorIdsInput(
+      product.vendors?.map((v) => v.id) ?? (product.vendorId ? [product.vendorId] : []),
+    );
     setSuggestions([]);
     setShowSuggestions(false);
     setShowForm(true);
@@ -354,7 +378,7 @@ export default function ProductsPage() {
             setBottleSizeInput("750");
             setThresholdInput("1");
             setReorderQtyInput("6");
-            setVendorIdInput("");
+            setVendorIdsInput([]);
             setError("");
             setShowForm(true);
           }}
@@ -424,6 +448,44 @@ export default function ProductsPage() {
                 Same name in a different size is allowed. Select an existing row to edit it.
               </span>
             </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                Category *
+              </span>
+              <div className="relative">
+                <select
+                  required
+                  value={categoryInput}
+                  onChange={(e) => {
+                    const next = e.target.value as ProductCategory;
+                    setCategoryInput(next);
+                    const sizes = bottleSizeOptionsForCategory(next);
+                    const nextSize = sizes[0]?.ml ?? 750;
+                    setBottleSizeInput(String(nextSize));
+                    if (!skuManualOverride && nameInput.trim()) {
+                      setSkuInput(skuFromNameAndSize(nameInput, nextSize));
+                    }
+                  }}
+                  className="w-full appearance-none rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {PRODUCT_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat} style={{ background: "var(--surface-elevated)" }}>
+                      {PRODUCT_CATEGORY_LABELS[cat]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={13}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "var(--text-muted)" }}
+                />
+              </div>
+            </label>
 
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
@@ -491,7 +553,7 @@ export default function ProductsPage() {
                     color: "var(--text-primary)",
                   }}
                 >
-                  {BOTTLE_SIZE_OPTIONS.map((opt) => (
+                  {sizeOptions.map((opt) => (
                     <option key={opt.ml} value={opt.ml} style={{ background: "var(--surface-elevated)" }}>
                       {opt.label}
                     </option>
@@ -563,32 +625,14 @@ export default function ProductsPage() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                Vendor
+                Vendors
               </span>
-              <div className="relative">
-                <select
-                  value={vendorIdInput}
-                  onChange={(e) => setVendorIdInput(e.target.value)}
-                  className="w-full appearance-none rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    background: "var(--surface-elevated)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  <option value="">No vendor</option>
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={13}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "var(--text-muted)" }}
-                />
-              </div>
+              <VendorMultiSelect
+                vendors={vendors}
+                selectedIds={vendorIdsInput}
+                onChange={setVendorIdsInput}
+                placeholder="Select vendors…"
+              />
             </label>
 
           </div>
@@ -623,6 +667,41 @@ export default function ProductsPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {products.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+            Category
+          </span>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("ALL")}
+            className="rounded-full px-3 py-1 text-xs font-medium"
+            style={{
+              background: categoryFilter === "ALL" ? "var(--accent-dim)" : "var(--surface-elevated)",
+              color: categoryFilter === "ALL" ? "var(--accent)" : "var(--text-secondary)",
+              border: `1px solid ${categoryFilter === "ALL" ? "rgba(245,166,35,0.35)" : "var(--border)"}`,
+            }}
+          >
+            All
+          </button>
+          {PRODUCT_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategoryFilter(cat)}
+              className="rounded-full px-3 py-1 text-xs font-medium"
+              style={{
+                background: categoryFilter === cat ? "var(--accent-dim)" : "var(--surface-elevated)",
+                color: categoryFilter === cat ? "var(--accent)" : "var(--text-secondary)",
+                border: `1px solid ${categoryFilter === cat ? "rgba(245,166,35,0.35)" : "var(--border)"}`,
+              }}
+            >
+              {PRODUCT_CATEGORY_LABELS[cat]}
+            </button>
+          ))}
+        </div>
       )}
 
       {loading ? (
@@ -668,7 +747,7 @@ export default function ProductsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                {["Name", "SKU", "Bottle Size", "Threshold", "Actions"].map((h) => (
+                {["Name", "Category", "SKU", "Bottle Size", "Threshold", "Actions"].map((h) => (
                   <th
                     key={h}
                     className={`px-4 py-3 text-xs font-medium uppercase tracking-widest ${h === "Actions" ? "text-right" : "text-left"}`}
@@ -680,7 +759,7 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((p, i) => (
+              {visibleProducts.map((p, i) => (
                 <tr
                   key={p.id}
                   style={{
@@ -689,7 +768,32 @@ export default function ProductsPage() {
                       i < visibleProducts.length - 1 ? "1px solid var(--border-subtle)" : undefined,
                   }}
                 >
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {p.name}
+                      <CategoryPill category={p.category ?? ProductCategory.SPIRIT} />
+                    </span>
+                    {p.vendors && p.vendors.length > 0 ? (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {p.vendors.map((v) => (
+                          <span
+                            key={v.id}
+                            className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            style={{
+                              background: "var(--surface)",
+                              border: "1px solid var(--border)",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            {v.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <CategoryPill category={p.category ?? ProductCategory.SPIRIT} />
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--text-muted)" }}>
                     {p.sku ?? "—"}
                   </td>

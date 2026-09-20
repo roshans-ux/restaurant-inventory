@@ -2,13 +2,19 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
+import { ProductCategory } from "@prisma/client";
+import VendorMultiSelect from "@/components/admin/VendorMultiSelect";
 import {
-  BOTTLE_SIZE_OPTIONS,
   DUPLICATE_BOTTLE_NAME_SIZE_MESSAGE,
   formatBottleSizeLabel,
   isSameBottleNameAndSize,
   skuFromNameAndSize,
 } from "@/lib/product-naming";
+import {
+  PRODUCT_CATEGORIES,
+  PRODUCT_CATEGORY_LABELS,
+  bottleSizeOptionsForCategory,
+} from "@/lib/product-category";
 
 export const ADD_BOTTLE_SELECT_VALUE = "__add_bottle__";
 
@@ -43,10 +49,11 @@ export default function AddBottleModal({
   const [nameInput, setNameInput] = useState("");
   const [skuInput, setSkuInput] = useState("");
   const [skuManualOverride, setSkuManualOverride] = useState(false);
+  const [categoryInput, setCategoryInput] = useState<ProductCategory>(ProductCategory.SPIRIT);
   const [bottleSizeInput, setBottleSizeInput] = useState("750");
   const [thresholdInput, setThresholdInput] = useState("1");
   const [reorderQtyInput, setReorderQtyInput] = useState("6");
-  const [vendorIdInput, setVendorIdInput] = useState("");
+  const [vendorIdsInput, setVendorIdsInput] = useState<string[]>([]);
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -57,10 +64,11 @@ export default function AddBottleModal({
     setNameInput("");
     setSkuInput("");
     setSkuManualOverride(false);
+    setCategoryInput(ProductCategory.SPIRIT);
     setBottleSizeInput("750");
     setThresholdInput("1");
     setReorderQtyInput("6");
-    setVendorIdInput("");
+    setVendorIdsInput([]);
     setSuggestions([]);
     setShowSuggestions(false);
     setError("");
@@ -85,6 +93,11 @@ export default function AddBottleModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  const sizeOptions = useMemo(
+    () => bottleSizeOptionsForCategory(categoryInput, Number(bottleSizeInput)),
+    [categoryInput, bottleSizeInput],
+  );
 
   const suggestedSku = useMemo(() => {
     const size = Number(bottleSizeInput);
@@ -165,11 +178,12 @@ export default function AddBottleModal({
         body: JSON.stringify({
           name: nameInput,
           sku: skuInput || undefined,
+          category: categoryInput,
           bottleSizeMl: Number(bottleSizeInput),
           openingBottles: 0,
           thresholdBottles: Math.max(0, Math.round(Number(thresholdInput) || 0)),
           reorderQuantity: Math.max(1, Math.round(Number(reorderQtyInput) || 6)),
-          vendorId: vendorIdInput || null,
+          vendorIds: vendorIdsInput,
         }),
       });
 
@@ -288,6 +302,44 @@ export default function AddBottleModal({
               )}
             </div>
           </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+              Category *
+            </span>
+            <div className="relative">
+              <select
+                required
+                value={categoryInput}
+                onChange={(e) => {
+                  const next = e.target.value as ProductCategory;
+                  setCategoryInput(next);
+                  const sizes = bottleSizeOptionsForCategory(next);
+                  const nextSize = sizes[0]?.ml ?? 750;
+                  setBottleSizeInput(String(nextSize));
+                  if (!skuManualOverride && nameInput.trim()) {
+                    setSkuInput(skuFromNameAndSize(nameInput, nextSize));
+                  }
+                }}
+                className="w-full appearance-none rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              >
+                {PRODUCT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {PRODUCT_CATEGORY_LABELS[cat]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={13}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
+                style={{ color: "var(--text-muted)" }}
+              />
+            </div>
+          </label>
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
@@ -336,7 +388,7 @@ export default function AddBottleModal({
                   color: "var(--text-primary)",
                 }}
               >
-                {BOTTLE_SIZE_OPTIONS.map((opt) => (
+                {sizeOptions.map((opt) => (
                   <option key={opt.ml} value={opt.ml}>
                     {opt.label}
                   </option>
@@ -406,32 +458,14 @@ export default function AddBottleModal({
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-              Vendor
+              Vendors
             </span>
-            <div className="relative">
-              <select
-                value={vendorIdInput}
-                onChange={(e) => setVendorIdInput(e.target.value)}
-                className="w-full appearance-none rounded-lg px-3 py-2 text-sm outline-none"
-                style={{
-                  background: "var(--surface-elevated)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-primary)",
-                }}
-              >
-                <option value="">No vendor</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={13}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
-                style={{ color: "var(--text-muted)" }}
-              />
-            </div>
+            <VendorMultiSelect
+              vendors={vendors}
+              selectedIds={vendorIdsInput}
+              onChange={setVendorIdsInput}
+              placeholder="Select vendors…"
+            />
           </label>
 
           {error && (

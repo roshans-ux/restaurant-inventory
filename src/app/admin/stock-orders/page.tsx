@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Send, XCircle } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Send, XCircle } from "lucide-react";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
-import { useAdminSession } from "@/components/admin/AdminSessionContext";
+import VendorMultiSelect from "@/components/admin/VendorMultiSelect";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
-import { buildCancelTxt, buildModifyTxt, buildOrderTxt } from "@/lib/vendor-messages";
-import { formatAppDate } from "@/lib/format-app-date";
+import { formatAppDate, formatIstLogStamp } from "@/lib/format-app-date";
 
 type Tab = "all" | "pending" | "placed" | "cancelled";
 type SortField = "product" | "qty" | "status" | "vendor" | "created" | "placed";
@@ -22,14 +21,20 @@ type StockOrder = {
   placedAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
-  product: { id: string; name: string; sku: string | null };
-  vendor: { id: string; name: string; whatsappNumber: string } | null;
+  product: {
+    id: string;
+    name: string;
+    sku: string | null;
+    vendors?: { id: string; name: string; email?: string | null }[];
+  };
+  vendor: { id: string; name: string; whatsappNumber: string; email?: string | null } | null;
+  notifiedVendors?: { id: string; name: string }[];
+  logs?: { id: string; message: string; createdAt: string }[];
 };
 
 const CANCELLABLE = new Set(["PENDING", "MODIFIED", "PLACED"]);
 
 export default function StockOrdersPage() {
-  const { venueName } = useAdminSession();
   const [orders, setOrders] = useState<StockOrder[]>([]);
   const [tab, setTab] = useState<Tab>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -39,6 +44,10 @@ export default function StockOrdersPage() {
   const [sortField, setSortField] = useState<SortField>("created");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [acting, setActing] = useState(false);
+  const [placeOpen, setPlaceOpen] = useState(false);
+  const [placeAssignments, setPlaceAssignments] = useState<Record<string, string[]>>({});
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,6 +161,7 @@ export default function StockOrdersPage() {
     if (!Number.isFinite(qty) || qty <= 0) return;
     setActing(true);
     setError("");
+    setNotice("");
     const previous = orders;
     setEditQty((prev) => {
       const next = { ...prev };
@@ -164,7 +174,12 @@ export default function StockOrdersPage() {
           ? {
               ...o,
               quantityBottles: qty,
-              status: qty !== o.quantityBottles ? "MODIFIED" : o.status,
+              status:
+                o.status === "PLACED"
+                  ? "PLACED"
+                  : qty !== o.quantityBottles
+                    ? "MODIFIED"
+                    : o.status,
             }
           : o,
       ),
@@ -177,13 +192,16 @@ export default function StockOrdersPage() {
       });
       const data = await readJsonResponse<{
         ok?: boolean;
-        data?: { order?: StockOrder };
+        data?: { order?: StockOrder; emailWarnings?: string[] };
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Update failed"));
       const updated = data.data?.order;
       if (updated) {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)));
+      }
+      if (data.data?.emailWarnings?.length) {
+        setNotice(data.data.emailWarnings.join(" "));
       }
     } catch (err) {
       setOrders(previous);
@@ -193,21 +211,10 @@ export default function StockOrdersPage() {
     }
   }
 
-  function downloadVendorFiles(files: { filename: string; content: string }[]) {
-    for (const file of files) {
-      const blob = new Blob([file.content], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = file.filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  }
-
   async function cancelOrder(orderId: string) {
     setActing(true);
     setError("");
+    setNotice("");
     const previous = orders;
     const nowIso = new Date().toISOString();
     setOrders((prev) =>
@@ -223,11 +230,16 @@ export default function StockOrdersPage() {
       });
       const data = await readJsonResponse<{
         ok?: boolean;
-        data?: { file?: { filename: string; content: string }; order?: StockOrder };
+        data?: {
+          order?: StockOrder;
+          emailWarnings?: string[];
+        };
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Cancel failed"));
-      if (data.data?.file) downloadVendorFiles([data.data.file]);
+      if (data.data?.emailWarnings?.length) {
+        setNotice(data.data.emailWarnings.join(" "));
+      }
       if (data.data?.order) {
         setOrders((prev) =>
           prev.map((o) => (o.id === orderId ? { ...o, ...data.data!.order! } : o)),
@@ -241,11 +253,35 @@ export default function StockOrdersPage() {
     }
   }
 
-  async function placeSelected() {
+  function openPlaceModal() {
     if (selected.size === 0) return;
+    const pending = orders.filter(
+      (o) => selected.has(o.id) && (o.status === "PENDING" || o.status === "MODIFIED"),
+    );
+    if (pending.length === 0) {
+      setError("Select one or more pending orders to place");
+      return;
+    }
+    const next: Record<string, string[]> = {};
+    for (const o of pending) {
+      const assigned = o.product.vendors ?? [];
+      next[o.id] = assigned.length === 1 ? [assigned[0].id] : [];
+    }
+    setPlaceAssignments(next);
+    setPlaceOpen(true);
+    setError("");
+  }
+
+  async function placeSelected() {
+    const ids = Object.keys(placeAssignments);
+    if (ids.length === 0) return;
+    if (ids.some((id) => (placeAssignments[id] ?? []).length === 0)) {
+      setError("Select at least one vendor for each SKU");
+      return;
+    }
     setActing(true);
     setError("");
-    const ids = [...selected];
+    setNotice("");
     const previous = orders;
     const nowIso = new Date().toISOString();
     setOrders((prev) =>
@@ -257,16 +293,27 @@ export default function StockOrdersPage() {
       const res = await fetch("/api/stock-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "place", orderIds: ids }),
+        body: JSON.stringify({
+          action: "place",
+          orderIds: ids,
+          assignments: ids.map((orderId) => ({
+            orderId,
+            vendorIds: placeAssignments[orderId],
+          })),
+        }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
-        data?: { files?: { filename: string; content: string }[] };
+        data?: { emailWarnings?: string[] };
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Place failed"));
-      if (data.data?.files?.length) downloadVendorFiles(data.data.files);
+      if (data.data?.emailWarnings?.length) {
+        setNotice(data.data.emailWarnings.join(" "));
+      }
       setSelected(new Set());
+      setPlaceOpen(false);
+      await load();
     } catch (err) {
       setOrders(previous);
       setError(err instanceof Error ? err.message : "Place failed");
@@ -279,6 +326,7 @@ export default function StockOrdersPage() {
     if (selected.size === 0) return;
     setActing(true);
     setError("");
+    setNotice("");
     const ids = [...selected];
     const previous = orders;
     const nowIso = new Date().toISOString();
@@ -296,11 +344,14 @@ export default function StockOrdersPage() {
       });
       const data = await readJsonResponse<{
         ok?: boolean;
-        data?: { files?: { filename: string; content: string }[] };
+        data?: { emailWarnings?: string[] };
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Cancel failed"));
-      if (data.data?.files?.length) downloadVendorFiles(data.data.files);
+      if (data.data?.emailWarnings?.length) {
+        setNotice(data.data.emailWarnings.join(" "));
+      }
+      await load();
     } catch (err) {
       setOrders(previous);
       setSelected(new Set(ids));
@@ -308,53 +359,6 @@ export default function StockOrdersPage() {
     } finally {
       setActing(false);
     }
-  }
-
-  function downloadTxt(mode: "order" | "cancel" | "modify") {
-    let selectedOrders = orders.filter((o) => selected.has(o.id));
-    if (mode === "cancel") {
-      selectedOrders = selectedOrders.filter((o) => o.status === "PLACED");
-    }
-    if (selectedOrders.length === 0) return;
-
-    const byVendor = new Map<string, StockOrder[]>();
-    for (const o of selectedOrders) {
-      const key = o.vendor?.id ?? "none";
-      const list = byVendor.get(key) ?? [];
-      list.push(o);
-      byVendor.set(key, list);
-    }
-
-    const texts: string[] = [];
-    for (const [, vendorOrders] of byVendor) {
-      const vendor = vendorOrders[0].vendor;
-      if (!vendor) {
-        texts.push("(No vendor assigned — assign vendors to products first)\n");
-        continue;
-      }
-      const lines = vendorOrders.map((o) => ({
-        productName: o.product.name,
-        sku: o.product.sku,
-        quantityBottles: o.quantityBottles,
-      }));
-      const venue = { name: venueName };
-      const v = { name: vendor.name, whatsappNumber: vendor.whatsappNumber };
-      if (mode === "order") {
-        texts.push(buildOrderTxt(venue, v, lines));
-      } else if (mode === "cancel") {
-        texts.push(buildCancelTxt(venue, v, lines));
-      } else {
-        texts.push(buildModifyTxt(venue, v, lines));
-      }
-    }
-
-    const blob = new Blob([texts.join("\n\n---\n\n")], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `stock-${mode}-${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   const tabs: { key: Tab; label: string }[] = [
@@ -377,43 +381,13 @@ export default function StockOrdersPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => downloadTxt("order")}
-              disabled={selected.size === 0}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
-              style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-            >
-              <Download size={13} />
-              Order TXT
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadTxt("modify")}
-              disabled={selected.size === 0}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
-              style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-            >
-              <Download size={13} />
-              Modify TXT
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadTxt("cancel")}
-              disabled={selected.size === 0}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
-              style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
-            >
-              <Download size={13} />
-              Cancel TXT
-            </button>
-            <button
-              type="button"
-              onClick={placeSelected}
+              onClick={openPlaceModal}
               disabled={acting || selected.size === 0}
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
               style={{ background: "var(--accent)", color: "#0e0e11" }}
             >
               <Send size={13} />
-              Place
+              Place Order
             </button>
             <button
               type="button"
@@ -450,6 +424,11 @@ export default function StockOrdersPage() {
       {error && (
         <p className="mb-4 text-sm" style={{ color: "var(--red)" }}>
           {error}
+        </p>
+      )}
+      {notice && (
+        <p className="mb-4 text-sm" style={{ color: "var(--accent)" }}>
+          {notice}
         </p>
       )}
 
@@ -495,6 +474,7 @@ export default function StockOrdersPage() {
                     />
                   </th>
                 )}
+                <th className="w-8 px-2 py-3" />
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-widest">
                   {sortHeader("product", "Product")}
                 </th>
@@ -524,14 +504,31 @@ export default function StockOrdersPage() {
               {filtered.map((o, i) => {
                 const editing = editQty[o.id] !== undefined;
                 const qtyVal = editing ? editQty[o.id] : String(o.quantityBottles);
-                const canEdit = !readOnly && (o.status === "PENDING" || o.status === "MODIFIED");
+                const canEdit =
+                  !readOnly &&
+                  (o.status === "PENDING" || o.status === "MODIFIED" || o.status === "PLACED");
                 const canCancel = !readOnly && CANCELLABLE.has(o.status);
+                const expanded = expandedIds.has(o.id);
+                const logs = [...(o.logs ?? [])].sort(
+                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+                );
+                const vendorLabel =
+                  (o.notifiedVendors && o.notifiedVendors.length > 0
+                    ? o.notifiedVendors.map((v) => v.name).join(", ")
+                    : o.product.vendors && o.product.vendors.length > 0
+                      ? o.product.vendors.map((v) => v.name).join(", ")
+                      : o.vendor?.name) ?? "—";
+                const colSpan = readOnly ? 7 : 9;
                 return (
+                  <Fragment key={o.id}>
                   <tr
-                    key={o.id}
                     style={{
                       background: "var(--surface-elevated)",
-                      borderBottom: i < filtered.length - 1 ? "1px solid var(--border-subtle)" : undefined,
+                      borderBottom: expanded
+                        ? undefined
+                        : i < filtered.length - 1
+                          ? "1px solid var(--border-subtle)"
+                          : undefined,
                     }}
                   >
                     {!readOnly && (
@@ -539,6 +536,24 @@ export default function StockOrdersPage() {
                         <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleSelect(o.id)} />
                       </td>
                     )}
+                    <td className="px-2 py-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(o.id)) next.delete(o.id);
+                            else next.add(o.id);
+                            return next;
+                          })
+                        }
+                        className="rounded p-1"
+                        style={{ color: "var(--text-muted)" }}
+                        aria-label={expanded ? "Collapse log" : "Expand log"}
+                      >
+                        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 font-medium">
                       {o.product.name}
                       {o.product.sku && (
@@ -548,7 +563,7 @@ export default function StockOrdersPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                      {o.vendor?.name ?? "—"}
+                      {vendorLabel}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {canEdit ? (
@@ -620,10 +635,100 @@ export default function StockOrdersPage() {
                       </td>
                     )}
                   </tr>
+                  {expanded && (
+                    <tr
+                      style={{
+                        background: "var(--surface)",
+                        borderBottom: i < filtered.length - 1 ? "1px solid var(--border-subtle)" : undefined,
+                      }}
+                    >
+                      <td colSpan={colSpan} className="px-6 py-3">
+                        {logs.length === 0 ? (
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            No log entries yet.
+                          </p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {logs.map((log) => (
+                              <li
+                                key={log.id}
+                                className="text-xs tabular-nums"
+                                style={{ color: "var(--text-secondary)" }}
+                              >
+                                {formatIstLogStamp(log.createdAt)} — {log.message}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {placeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-auto rounded-xl p-5"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <h2 className="text-lg font-semibold">Select vendors for this order</h2>
+            <div className="mt-4 space-y-4">
+              {orders
+                .filter((o) => placeAssignments[o.id] !== undefined)
+                .map((o) => (
+                  <div key={o.id} className="space-y-1.5">
+                    <p className="text-sm font-medium">{o.product.name}</p>
+                    <VendorMultiSelect
+                      vendors={o.product.vendors ?? []}
+                      selectedIds={placeAssignments[o.id] ?? []}
+                      onChange={(ids) =>
+                        setPlaceAssignments((prev) => ({ ...prev, [o.id]: ids }))
+                      }
+                      placeholder="Select vendors…"
+                      required
+                    />
+                    {(placeAssignments[o.id] ?? []).map((vendorId) => {
+                      const vendor = (o.product.vendors ?? []).find((v) => v.id === vendorId);
+                      if (!vendor || vendor.email?.trim()) return null;
+                      return (
+                        <p
+                          key={vendorId}
+                          className="text-xs"
+                          style={{ color: "var(--accent)" }}
+                        >
+                          No email address on file for this vendor. Add one in Settings.
+                        </p>
+                      );
+                    })}
+                  </div>
+                ))}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPlaceOpen(false)}
+                className="rounded-lg px-3 py-2 text-sm"
+                style={{ color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={placeSelected}
+                disabled={acting}
+                className="rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+                style={{ background: "var(--accent)", color: "#0e0e11" }}
+              >
+                {acting ? "Placing…" : "Confirm"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

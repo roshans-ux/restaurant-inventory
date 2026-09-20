@@ -11,7 +11,7 @@ import {
   isPosItemConfigured,
 } from "@/lib/pos-draft-mappings";
 import { excludeDraftSuppressionMappings } from "@/lib/pos-mapping-utils";
-import { isBeerBottleSize } from "@/lib/product-naming";
+import { isAllowedStraightPour, isFullUnitSaleCategory } from "@/lib/product-category";
 import {
   findPosItemConflict,
   posItemConflictMessage,
@@ -71,21 +71,22 @@ export async function POST(request: NextRequest) {
     }
 
     const bottleSizeMl = Number(product.bottleSizeMl);
-    if (isBeerBottleSize(bottleSizeMl)) {
-      if (parsed.pourMl !== bottleSizeMl) {
-        return apiError(
-          "BEER_MAPPING_INVALID",
-          "Beer bottles only support full-bottle mapping at the bottle size",
-          400,
-        );
-      }
-      const existingBeer = await prisma.posMenuMapping.findFirst({
+    const category = product.category;
+    if (!isAllowedStraightPour(category, bottleSizeMl, parsed.pourMl)) {
+      return apiError(
+        "POUR_SIZE_INVALID",
+        "Sale size is not allowed for this bottle category",
+        400,
+      );
+    }
+    if (isFullUnitSaleCategory(category)) {
+      const existingUnit = await prisma.posMenuMapping.findFirst({
         where: { tenantId: session.tenantId, productId: parsed.productId },
       });
-      if (existingBeer) {
+      if (existingUnit) {
         return apiError(
-          "BEER_MAPPING_EXISTS",
-          "Beer mapping already exists — update POS Item ID in the table",
+          "UNIT_MAPPING_EXISTS",
+          "This bottle already has a full-unit mapping — update POS Item ID in the table",
           409,
         );
       }
@@ -151,9 +152,37 @@ export async function PATCH(request: NextRequest) {
       return apiError("POS_MAPPING_NOT_FOUND", "Mapping not found", 404);
     }
 
-    const bottleSizeMl = Number(existing.product.bottleSizeMl);
-    const isBeerFull =
-      isBeerBottleSize(bottleSizeMl) && Number(existing.pourMl) === bottleSizeMl;
+    const category = existing.product.category;
+    const isUnitSaleLocked = isFullUnitSaleCategory(category);
+
+    if (parsed.pourMl !== undefined && parsed.pourMl !== Number(existing.pourMl)) {
+      if (isUnitSaleLocked) {
+        return apiError(
+          "POUR_SIZE_LOCKED",
+          "Sale size is fixed to a full unit for this category",
+          400,
+        );
+      }
+      const productForPour = parsed.productId
+        ? await findProductForTenant(session.tenantId, parsed.productId)
+        : existing.product;
+      if (!productForPour) {
+        return apiError("PRODUCT_NOT_FOUND", "Product not found", 404);
+      }
+      if (
+        !isAllowedStraightPour(
+          productForPour.category,
+          Number(productForPour.bottleSizeMl),
+          parsed.pourMl,
+        )
+      ) {
+        return apiError(
+          "POUR_SIZE_INVALID",
+          "Sale size is not allowed for this bottle category",
+          400,
+        );
+      }
+    }
 
     const nextPosItemId = parsed.posItemId !== undefined ? parsed.posItemId : existing.posItemId;
 
@@ -171,7 +200,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    if (!isBeerFull && parsed.productId) {
+    if (!isUnitSaleLocked && parsed.productId) {
       const product = await findProductForTenant(session.tenantId, parsed.productId);
       if (!product) {
         return apiError("PRODUCT_NOT_FOUND", "Product not found", 404);
@@ -182,8 +211,8 @@ export async function PATCH(request: NextRequest) {
       where: { id: parsed.id },
       data: {
         ...(parsed.posItemId !== undefined ? { posItemId: parsed.posItemId } : {}),
-        ...(!isBeerFull && parsed.productId ? { productId: parsed.productId } : {}),
-        ...(!isBeerFull && parsed.pourMl ? { pourMl: parsed.pourMl } : {}),
+        ...(!isUnitSaleLocked && parsed.productId ? { productId: parsed.productId } : {}),
+        ...(!isUnitSaleLocked && parsed.pourMl ? { pourMl: parsed.pourMl } : {}),
       },
       include: { product: true },
     });

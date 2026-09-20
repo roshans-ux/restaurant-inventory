@@ -5,12 +5,25 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import {
-  buildCancelTxt,
-  buildModifyTxt,
-  buildOrderTxt,
-  txtFilename,
+  buildCancelEmail,
+  buildOrderEmail,
 } from "@/lib/vendor-messages";
-import { sendVendorOrder } from "@/lib/whatsapp/client";
+import { trySendVendorEmail } from "@/lib/email/vendor-order";
+import { appendStockOrderLog } from "@/lib/stock-order-log";
+
+const orderInclude = {
+  product: {
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      vendors: { select: { id: true, name: true, email: true } },
+    },
+  },
+  vendor: { select: { id: true, name: true, whatsappNumber: true, email: true } },
+  notifiedVendors: { select: { id: true, name: true, whatsappNumber: true, email: true } },
+  logs: { orderBy: { createdAt: "desc" as const } },
+};
 
 export async function GET(request: NextRequest) {
   const session = await requireApiSession(request);
@@ -40,10 +53,7 @@ export async function GET(request: NextRequest) {
   try {
     const orders = await prisma.stockOrder.findMany({
       where,
-      include: {
-        product: { select: { id: true, name: true, sku: true } },
-        vendor: { select: { id: true, name: true, whatsappNumber: true } },
-      },
+      include: orderInclude,
       orderBy: { createdAt: "desc" },
     });
     return apiOk({ orders });
@@ -57,6 +67,14 @@ export async function GET(request: NextRequest) {
 const bulkSchema = z.object({
   action: z.enum(["place", "cancel"]),
   orderIds: z.array(z.string().uuid()).min(1),
+  assignments: z
+    .array(
+      z.object({
+        orderId: z.string().uuid(),
+        vendorIds: z.array(z.string().uuid()).min(1),
+      }),
+    )
+    .optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -86,8 +104,11 @@ export async function POST(request: NextRequest) {
                 },
         },
         include: {
-          product: true,
+          product: {
+            include: { vendors: { select: { id: true, name: true, email: true } } },
+          },
           vendor: true,
+          notifiedVendors: true,
         },
       }),
     ]);
@@ -100,99 +121,228 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
-    const byVendor = new Map<
-      string,
-      { vendor: { id: string; name: string; whatsappNumber: string }; lines: typeof orders }
-    >();
-
-    for (const order of orders) {
-      const vendor = order.vendor ?? {
-        id: "unassigned",
-        name: "Unassigned Vendor",
-        whatsappNumber: "—",
-      };
-      const key = vendor.id;
-      const group = byVendor.get(key) ?? { vendor, lines: [] };
-      group.lines.push(order);
-      byVendor.set(key, group);
-    }
-
-    const files: { filename: string; content: string; vendorName: string }[] = [];
+    const emailWarnings: string[] = [];
 
     if (payload.action === "place") {
-      await prisma.stockOrder.updateMany({
-        where: { id: { in: orders.map((o) => o.id) } },
-        data: { status: StockOrderStatus.PLACED, placedAt: now },
+      if (!payload.assignments || payload.assignments.length === 0) {
+        return apiError("VENDORS_REQUIRED", "Select vendors for each SKU", 400);
+      }
+      const assignmentByOrder = new Map(
+        payload.assignments.map((a) => [a.orderId, a.vendorIds]),
+      );
+
+      const allVendorIds = [...new Set(payload.assignments.flatMap((a) => a.vendorIds))];
+      const vendorRows = await prisma.vendor.findMany({
+        where: { tenantId: session.tenantId, id: { in: allVendorIds } },
+      });
+      const vendorById = new Map(vendorRows.map((v) => [v.id, v]));
+
+      for (const order of orders) {
+        const vendorIds = assignmentByOrder.get(order.id);
+        if (!vendorIds || vendorIds.length === 0) {
+          return apiError("VENDORS_REQUIRED", `Select vendors for ${order.product.name}`, 400);
+        }
+        const assigned = new Set(order.product.vendors.map((v) => v.id));
+        for (const vid of vendorIds) {
+          if (!vendorById.has(vid)) {
+            return apiError("INVALID_VENDOR", "Vendor not found", 400);
+          }
+          if (assigned.size > 0 && !assigned.has(vid)) {
+            return apiError(
+              "VENDOR_NOT_ASSIGNED",
+              `${vendorById.get(vid)?.name ?? "Vendor"} is not assigned to ${order.product.name}`,
+              400,
+            );
+          }
+        }
+      }
+
+      const skuNamesByVendor = new Map<string, Set<string>>();
+
+      await prisma.$transaction(async (tx) => {
+        for (const order of orders) {
+          const vendorIds = assignmentByOrder.get(order.id)!;
+          await tx.stockOrder.update({
+            where: { id: order.id },
+            data: {
+              status: StockOrderStatus.PLACED,
+              placedAt: now,
+              vendorId: vendorIds[0] ?? null,
+              notifiedVendors: { set: vendorIds.map((id) => ({ id })) },
+            },
+          });
+          for (const vid of vendorIds) {
+            const set = skuNamesByVendor.get(vid) ?? new Set();
+            set.add(order.product.name);
+            skuNamesByVendor.set(vid, set);
+          }
+        }
       });
 
-      for (const { vendor, lines } of byVendor.values()) {
-        const content = buildOrderTxt(
-          { name: tenant.name },
-          { name: vendor.name },
-          lines.map((o) => ({
-            productName: o.product.name,
-            quantityBottles: o.quantityBottles,
-          })),
-        );
-        files.push({
-          filename: txtFilename("order", vendor.name),
-          content,
-          vendorName: vendor.name,
+      const sendResultByVendor = new Map<string, "sent" | "missing" | "failed">();
+      for (const [vendorId, skuNames] of skuNamesByVendor) {
+        const vendor = vendorById.get(vendorId);
+        if (!vendor) continue;
+        const email = vendor.email?.trim() ?? "";
+        if (!email) {
+          sendResultByVendor.set(vendorId, "missing");
+          continue;
+        }
+        const sent = await trySendVendorEmail({
+          to: email,
+          subject: `New Order from ${tenant.name}`,
+          text: buildOrderEmail(tenant.name, vendor.name, [...skuNames]),
         });
-        await sendVendorOrder({
-          vendorWhatsappNumber: vendor.whatsappNumber,
-          body: content,
-        });
+        sendResultByVendor.set(vendorId, sent ? "sent" : "failed");
+        if (!sent) {
+          emailWarnings.push(
+            `Order placed but email could not be sent to ${vendor.name}. Check their email address in Settings.`,
+          );
+        }
       }
-    } else {
-      const placedOrders = orders.filter((o) => o.status === StockOrderStatus.PLACED);
 
-      await prisma.stockOrder.updateMany({
-        where: { id: { in: orders.map((o) => o.id) } },
-        data: { status: StockOrderStatus.CANCELLED, cancelledAt: now },
+      await prisma.$transaction(async (tx) => {
+        for (const order of orders) {
+          const vendorIds = assignmentByOrder.get(order.id)!;
+          for (const vid of vendorIds) {
+            const vendor = vendorById.get(vid);
+            if (!vendor) continue;
+            const result = sendResultByVendor.get(vid);
+            const email = vendor.email?.trim() ?? "";
+            if (result === "sent") {
+              await appendStockOrderLog(
+                tx,
+                order.id,
+                `Order placed. Email sent to: ${vendor.name} (${email})`,
+              );
+            } else if (result === "failed") {
+              await appendStockOrderLog(
+                tx,
+                order.id,
+                `Order placed. No email sent — email could not be sent to ${vendor.name} (${email}).`,
+              );
+            } else {
+              await appendStockOrderLog(
+                tx,
+                order.id,
+                `Order placed. No email sent — no email address on file for ${vendor.name}.`,
+              );
+            }
+          }
+        }
       });
-
-      const placedByVendor = new Map<
-        string,
-        { vendor: { id: string; name: string; whatsappNumber: string }; lines: typeof placedOrders }
-      >();
-
-      for (const order of placedOrders) {
-        const vendor = order.vendor ?? {
-          id: "unassigned",
-          name: "Unassigned Vendor",
-          whatsappNumber: "—",
-        };
-        const key = vendor.id;
-        const group = placedByVendor.get(key) ?? { vendor, lines: [] };
-        group.lines.push(order);
-        placedByVendor.set(key, group);
-      }
-
-      for (const { vendor, lines } of placedByVendor.values()) {
-        const content = buildCancelTxt(
-          { name: tenant.name },
-          { name: vendor.name },
-          lines.map((o) => ({
-            productName: o.product.name,
-            quantityBottles: o.quantityBottles,
-          })),
-        );
-        files.push({
-          filename: txtFilename("cancel", vendor.name),
-          content,
-          vendorName: vendor.name,
-        });
-      }
 
       return apiOk({
-        files,
         updatedCount: orders.length,
-        notifiedCount: placedOrders.length,
+        notifiedCount: [...sendResultByVendor.values()].filter((r) => r === "sent").length,
+        emailWarnings,
       });
     }
 
-    return apiOk({ files, updatedCount: orders.length, notifiedCount: orders.length });
+    const placedOrders = orders.filter((o) => o.status === StockOrderStatus.PLACED);
+
+    await prisma.$transaction(async (tx) => {
+      for (const order of orders) {
+        await tx.stockOrder.update({
+          where: { id: order.id },
+          data: { status: StockOrderStatus.CANCELLED, cancelledAt: now },
+        });
+      }
+    });
+
+    const placedByVendor = new Map<
+      string,
+      {
+        vendor: { id: string; name: string; email: string | null };
+        lines: typeof placedOrders;
+      }
+    >();
+
+    for (const order of placedOrders) {
+      const targets =
+        order.notifiedVendors.length > 0
+          ? order.notifiedVendors
+          : order.vendor
+            ? [order.vendor]
+            : [];
+      for (const vendor of targets) {
+        const group = placedByVendor.get(vendor.id) ?? { vendor, lines: [] };
+        group.lines.push(order);
+        placedByVendor.set(vendor.id, group);
+      }
+    }
+
+    const cancelResultByVendor = new Map<string, "sent" | "missing" | "failed">();
+    for (const { vendor, lines } of placedByVendor.values()) {
+      const email = vendor.email?.trim() ?? "";
+      if (!email) {
+        cancelResultByVendor.set(vendor.id, "missing");
+        continue;
+      }
+      const sent = await trySendVendorEmail({
+        to: email,
+        subject: `Order Cancellation from ${tenant.name}`,
+        text: buildCancelEmail(
+          tenant.name,
+          vendor.name,
+          [...new Set(lines.map((o) => o.product.name))],
+        ),
+      });
+      cancelResultByVendor.set(vendor.id, sent ? "sent" : "failed");
+      if (!sent) {
+        emailWarnings.push(
+          `Order cancelled but email could not be sent to ${vendor.name}. Check their email address in Settings.`,
+        );
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const order of orders) {
+        if (order.status !== StockOrderStatus.PLACED) {
+          await appendStockOrderLog(tx, order.id, "Order cancelled");
+          continue;
+        }
+        const targets =
+          order.notifiedVendors.length > 0
+            ? order.notifiedVendors
+            : order.vendor
+              ? [order.vendor]
+              : [];
+        if (targets.length === 0) {
+          await appendStockOrderLog(tx, order.id, "Order cancelled");
+          continue;
+        }
+        for (const vendor of targets) {
+          const result = cancelResultByVendor.get(vendor.id);
+          const email = vendor.email?.trim() ?? "";
+          if (result === "sent") {
+            await appendStockOrderLog(
+              tx,
+              order.id,
+              `Order cancelled. Cancellation email sent to: ${vendor.name} (${email})`,
+            );
+          } else if (result === "failed") {
+            await appendStockOrderLog(
+              tx,
+              order.id,
+              `Order cancelled. Cancellation email could not be sent to: ${vendor.name} (${email})`,
+            );
+          } else {
+            await appendStockOrderLog(
+              tx,
+              order.id,
+              `Order cancelled. No email sent — no email address on file for ${vendor.name}.`,
+            );
+          }
+        }
+      }
+    });
+
+    return apiOk({
+      updatedCount: orders.length,
+      notifiedCount: placedOrders.length,
+      emailWarnings,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return apiError("INVALID_REQUEST", "Invalid request", 400);

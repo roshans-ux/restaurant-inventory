@@ -27,6 +27,7 @@ const patchSchema = z.object({
     .record(z.string(), dayShiftSchema)
     .optional(),
   adminWhatsappNumber: z.union([z.string(), z.null()]).optional(),
+  paymentReminderDays: z.number().int().min(1).max(30).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
         apiKey: true,
         posWebhookSecret: true,
         adminWhatsappNumber: true,
+        paymentReminderDays: true,
       },
     });
     if (!tenant) {
@@ -135,11 +137,15 @@ export async function PATCH(request: NextRequest) {
         ...(adminWhatsappNumber !== undefined
           ? { adminWhatsappNumber }
           : {}),
+        ...(payload.paymentReminderDays !== undefined
+          ? { paymentReminderDays: payload.paymentReminderDays }
+          : {}),
       },
       select: {
         slippageTolerancePercent: true,
         shiftSchedule: true,
         adminWhatsappNumber: true,
+        paymentReminderDays: true,
       },
     });
     return apiOk({

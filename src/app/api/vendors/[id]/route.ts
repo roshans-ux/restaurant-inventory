@@ -11,6 +11,8 @@ type Params = { params: Promise<{ id: string }> };
 const patchSchema = z.object({
   name: z.string().min(1).optional(),
   whatsappNumber: z.string().min(5).optional(),
+  creditPeriodDays: z.number().int().min(0).nullable().optional(),
+  email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
 });
 
 export async function PATCH(request: NextRequest, { params }: Params) {
@@ -42,6 +44,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       data: {
         ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
         ...(whatsappNumber !== undefined ? { whatsappNumber } : {}),
+        ...(payload.creditPeriodDays !== undefined
+          ? { creditPeriodDays: payload.creditPeriodDays }
+          : {}),
+        ...(payload.email !== undefined
+          ? { email: payload.email?.trim() ? payload.email.trim() : null }
+          : {}),
       },
     });
     revalidateTag("vendors", { expire: 0 });

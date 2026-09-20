@@ -2,21 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Info, RotateCcw } from "lucide-react";
+import { ProductCategory } from "@prisma/client";
 import BottleSelectDropdown from "@/components/admin/BottleSelectDropdown";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
 import { formatAppDateTime } from "@/lib/format-app-date";
-import { isBeerBottleSize } from "@/lib/product-naming";
+import { isHandoverCategory } from "@/lib/product-category";
+import { formatSlippageAlertBody, parseSlippageAlertKind } from "@/lib/slippage-alert";
 
 type Product = {
   id: string;
   name: string;
   bottleSizeMl: string | number;
+  category: ProductCategory;
 };
 
 type ActiveRotation = {
   id: string;
   productId: string;
   productName: string;
+  category?: ProductCategory;
   barcodeId: string;
   openedAt: string;
   mlRemaining: number;
@@ -63,9 +67,12 @@ export default function HandoverPage() {
   }, []);
 
   const handoverProducts = useMemo(
-    () => products.filter((p) => !isBeerBottleSize(Number(p.bottleSizeMl))),
+    () => products.filter((p) => isHandoverCategory(p.category ?? ProductCategory.SPIRIT)),
     [products],
   );
+
+  const selectedIsKeg =
+    handoverProducts.find((p) => p.id === productId)?.category === ProductCategory.DRAFT_BEER;
 
   useEffect(() => {
     void load();
@@ -96,7 +103,11 @@ export default function HandoverPage() {
 
     setSubmitting(true);
     setError("");
-    setMessage(`Bottle ${barcodeId} is now in rotation for ${selected.name}`);
+    setMessage(
+      selected.category === ProductCategory.DRAFT_BEER
+        ? `Keg ${barcodeId} is now in rotation for ${selected.name}`
+        : `Bottle ${barcodeId} is now in rotation for ${selected.name}`,
+    );
     setBarcode("");
     barcodeRef.current?.focus();
     setActiveRotations((prev) => [
@@ -104,6 +115,7 @@ export default function HandoverPage() {
         id: tempId,
         productId,
         productName: selected.name,
+        category: selected.category,
         barcodeId,
         openedAt: new Date().toISOString(),
         mlRemaining: bottleSizeMl,
@@ -129,7 +141,11 @@ export default function HandoverPage() {
       }
       const r = data.data?.rotation;
       if (!r) throw new Error("Failed to log bottle");
-      setMessage(`Bottle ${r.barcodeId} is now in rotation for ${r.productName}`);
+      setMessage(
+        r.category === ProductCategory.DRAFT_BEER
+          ? `Keg ${r.barcodeId} is now in rotation for ${r.productName}`
+          : `Bottle ${r.barcodeId} is now in rotation for ${r.productName}`,
+      );
       setActiveRotations((prev) => {
         const withoutTempOrSku = prev.filter(
           (x) => x.id !== tempId && x.productId !== r.productId,
@@ -139,6 +155,7 @@ export default function HandoverPage() {
             id: r.id,
             productId: r.productId,
             productName: r.productName,
+            category: r.category,
             barcodeId: r.barcodeId,
             openedAt: r.openedAt,
             mlRemaining: r.mlRemaining,
@@ -199,7 +216,7 @@ export default function HandoverPage() {
           >
             <Info size={16} className="shrink-0 mt-0.5" style={{ color: "var(--blue)" }} />
             <p className="text-sm leading-relaxed" style={{ color: "var(--blue)" }}>
-              Bottles scanned here are for pouring only. If a full bottle is being sold as a whole, it should be taken directly from the main storeroom inventory and not from bottles already scanned and handed to the bar.
+              Only scan bottles and kegs that will be opened and poured from. Bottled beers and ciders are sold whole and handled by the POS directly. Do not scan them here.
             </p>
           </div>
           <div className="grid gap-4">
@@ -215,7 +232,7 @@ export default function HandoverPage() {
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                Scan or enter bottle barcode
+                Scan or enter {selectedIsKeg ? "keg" : "bottle"} barcode
               </span>
               <input
                 ref={barcodeRef}
@@ -254,7 +271,7 @@ export default function HandoverPage() {
             className="mt-4 w-full rounded-lg py-2 text-sm font-medium disabled:opacity-50"
             style={{ background: "var(--accent)", color: "#0e0e11" }}
           >
-            {submitting ? "Logging…" : "Put in rotation"}
+            {submitting ? "Logging…" : selectedIsKeg ? "Put keg in rotation" : "Put in rotation"}
           </button>
         </form>
 
@@ -323,7 +340,23 @@ export default function HandoverPage() {
                             i < activeRotations.length - 1 ? "1px solid var(--border-subtle)" : undefined,
                         }}
                       >
-                        <td className="px-4 py-3 font-medium">{r.productName}</td>
+                        <td className="px-4 py-3 font-medium">
+                          <span className="inline-flex flex-wrap items-center gap-2">
+                            {r.productName}
+                            {r.category === ProductCategory.DRAFT_BEER ? (
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                                style={{
+                                  background: "rgba(74,222,128,0.14)",
+                                  color: "#86efac",
+                                  border: "1px solid rgba(74,222,128,0.35)",
+                                }}
+                              >
+                                Keg
+                              </span>
+                            ) : null}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 font-mono text-xs">{r.barcodeId}</td>
                         <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>
                           {formatAppDateTime(r.openedAt)}
@@ -353,19 +386,30 @@ export default function HandoverPage() {
                 Slippage alerts
               </h2>
               <div className="grid gap-2">
-                {slippageAlerts.map((a) => (
-                  <div
-                    key={a.id}
-                    className="rounded-lg px-4 py-3 text-sm"
-                    style={{
-                      background: "var(--red-dim)",
-                      border: "1px solid rgba(224,92,92,0.25)",
-                      color: "var(--red)",
-                    }}
-                  >
-                    {a.message}
-                  </div>
-                ))}
+                {slippageAlerts.map((a) => {
+                  const underpour = parseSlippageAlertKind(a.message) === "underpour";
+                  return (
+                    <div
+                      key={a.id}
+                      className="rounded-lg px-4 py-3 text-sm"
+                      style={
+                        underpour
+                          ? {
+                              background: "var(--accent-dim)",
+                              border: "1px solid rgba(245,166,35,0.35)",
+                              color: "var(--accent)",
+                            }
+                          : {
+                              background: "var(--red-dim)",
+                              border: "1px solid rgba(224,92,92,0.25)",
+                              color: "var(--red)",
+                            }
+                      }
+                    >
+                      {formatSlippageAlertBody(a.message)}
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}

@@ -1,16 +1,24 @@
+import { formatCategoryBottleSizeLabel, isKnownCategoryBottleSize } from "@/lib/product-category";
+
 export const BEER_BOTTLE_SIZES_ML = [330, 650] as const;
 
 export const BOTTLE_SIZE_OPTIONS = [
   { label: "330ml", ml: 330 },
+  { label: "375ml", ml: 375 },
+  { label: "500ml", ml: 500 },
   { label: "650ml", ml: 650 },
   { label: "750ml", ml: 750 },
   { label: "1L", ml: 1000 },
   { label: "1.75L", ml: 1750 },
   { label: "2L", ml: 2000 },
+  { label: "20L", ml: 20000 },
+  { label: "30L", ml: 30000 },
+  { label: "50L", ml: 50000 },
 ] as const;
 
 export const ALLOWED_BOTTLE_SIZE_ML = BOTTLE_SIZE_OPTIONS.map((o) => o.ml);
 
+/** @deprecated Prefer category-based checks via product-category.ts */
 export function isBeerBottleSize(bottleSizeMl: number): boolean {
   return (BEER_BOTTLE_SIZES_ML as readonly number[]).includes(bottleSizeMl);
 }
@@ -23,8 +31,11 @@ export function normalizeBottleSizeMl(ml: number): number {
 }
 
 export function formatBottleSizeLabel(ml: number): string {
-  const match = BOTTLE_SIZE_OPTIONS.find((o) => o.ml === ml);
-  return match?.label ?? `${ml}ml`;
+  if (isKnownCategoryBottleSize(ml) || BOTTLE_SIZE_OPTIONS.some((o) => o.ml === ml)) {
+    const match = BOTTLE_SIZE_OPTIONS.find((o) => o.ml === ml);
+    return match?.label ?? formatCategoryBottleSizeLabel(ml);
+  }
+  return formatCategoryBottleSizeLabel(ml);
 }
 
 export function formatProductNameWithSize(name: string, bottleSizeMl: number): string {

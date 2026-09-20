@@ -35,6 +35,15 @@ enum QuantityUnit {
 enum AlertType {
   LOW_STOCK
   SLIPPAGE
+  PAYMENT_REMINDER
+}
+
+enum ProductCategory {
+  SPIRIT
+  WINE
+  BOTTLED_BEER
+  DRAFT_BEER
+  CIDER
 }
 
 enum BottleRotationStatus {
@@ -65,6 +74,7 @@ model Tenant {
   shiftReportWindowStartAt   DateTime?
   shiftReportWindowEndAt     DateTime?
   adminWhatsappNumber        String?
+  paymentReminderDays        Int       @default(3)
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
   users            User[]
@@ -108,15 +118,20 @@ model AuthToken {
 }
 
 model Vendor {
-  id              String       @id @default(uuid())
-  tenantId        String
-  name            String
-  whatsappNumber  String
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  products        Product[]
-  stockOrders     StockOrder[]
+  id               String        @id @default(uuid())
+  tenantId         String
+  name             String
+  whatsappNumber   String
+  email            String?
+  creditPeriodDays Int?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products         Product[]     @relation("ProductVendors")
+  primaryProducts  Product[]     @relation("ProductPrimaryVendor")
+  stockOrders      StockOrder[]
+  notifiedOrders   StockOrder[]  @relation("StockOrderVendors")
+  stockMovements   StockMovement[]
 
   @@index([tenantId])
 }
@@ -127,13 +142,15 @@ model Product {
   vendorId         String?
   name             String
   sku              String?
+  category         ProductCategory  @default(SPIRIT)
   bottleSizeMl     Decimal          @default(750)
   defaultPourMl    Decimal          @default(30)
   parLevelBottles  Decimal?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  vendor           Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  vendor           Vendor?          @relation("ProductPrimaryVendor", fields: [vendorId], references: [id], onDelete: SetNull)
+  vendors          Vendor[]         @relation("ProductVendors")
   mappings         PosMenuMapping[]
   reorderConfig    ReorderConfig?
   stockMovements   StockMovement[]
@@ -224,6 +241,7 @@ model PosSaleLine {
 model StockMovement {
   id              String            @id @default(uuid())
   productId       String
+  vendorId        String?
   type            StockMovementType
   quantityDeltaMl Int
   quantityInput   Decimal?
@@ -231,21 +249,26 @@ model StockMovement {
   reason          String?
   referenceId     String?
   metadata        Json?
+  fulfilmentDate  DateTime?
+  paymentDueAt    DateTime?
   createdAt       DateTime          @default(now())
   product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendor          Vendor?           @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   @@index([productId, createdAt])
+  @@index([vendorId, paymentDueAt])
 }
 
 model Alert {
-  id         String    @id @default(uuid())
-  productId  String
-  type       AlertType
-  message    String
-  resolvedAt DateTime?
-  readAt     DateTime?
-  createdAt  DateTime  @default(now())
-  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id           String    @id @default(uuid())
+  productId    String
+  type         AlertType
+  message      String
+  referenceKey String?   @unique
+  resolvedAt   DateTime?
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, type, resolvedAt])
 }
@@ -283,7 +306,19 @@ model StockOrder {
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   vendor          Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  notifiedVendors Vendor[]         @relation("StockOrderVendors")
+  logs            StockOrderLog[]
 
   @@index([tenantId, status])
   @@index([tenantId, productId, status])
+}
+
+model StockOrderLog {
+  id           String     @id @default(uuid())
+  stockOrderId String
+  message      String
+  createdAt    DateTime   @default(now())
+  stockOrder   StockOrder @relation(fields: [stockOrderId], references: [id], onDelete: Cascade)
+
+  @@index([stockOrderId, createdAt])
 }

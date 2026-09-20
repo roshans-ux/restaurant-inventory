@@ -13,6 +13,7 @@ import { X } from "lucide-react";
 import { AlertType } from "@prisma/client";
 import { formatAppDateTime } from "@/lib/format-app-date";
 import { formatProductNameWithSize } from "@/lib/product-naming";
+import { formatSlippageAlertBody, parseSlippageAlertKind } from "@/lib/slippage-alert";
 
 type AlertItem = {
   id: string;
@@ -37,28 +38,42 @@ type NotificationsPopoverProps = {
 
 const PANEL_WIDTH = 380;
 
-function typeLabel(type: AlertType): string {
-  return type === AlertType.SLIPPAGE ? "Slippage" : "Low stock";
+function typeLabel(type: AlertType, message: string): string {
+  if (type === AlertType.PAYMENT_REMINDER) return "Payment reminder";
+  if (type !== AlertType.SLIPPAGE) return "Low stock";
+  const kind = parseSlippageAlertKind(message);
+  if (kind === "overpour") return "Overpour";
+  if (kind === "underpour") return "Underpour";
+  return "Slippage";
 }
 
 function NotificationRow({
   alert,
   marking,
   onMarkRead,
+  onMarkUnread,
 }: {
   alert: AlertItem;
   marking: boolean;
   onMarkRead: (id: string) => void;
+  onMarkUnread: (id: string) => void;
 }) {
   const isSlippage = alert.type === AlertType.SLIPPAGE;
   const unread = alert.readAt == null;
-  const accent = isSlippage ? "var(--red)" : "var(--accent)";
+  const kind = parseSlippageAlertKind(alert.message);
+  const accent =
+    kind === "underpour"
+      ? "var(--accent)"
+      : isSlippage
+        ? "var(--red)"
+        : "var(--accent)";
   const sizedName = formatProductNameWithSize(alert.product.name, Number(alert.product.bottleSizeMl));
-  const displayMessage = alert.message.includes(sizedName)
-    ? alert.message
-    : alert.message.includes(alert.product.name)
-      ? alert.message.replace(alert.product.name, sizedName)
-      : alert.message;
+  const body = formatSlippageAlertBody(alert.message);
+  const displayMessage = body.includes(sizedName)
+    ? body
+    : body.includes(alert.product.name)
+      ? body.replace(alert.product.name, sizedName)
+      : body;
 
   return (
     <div
@@ -95,11 +110,11 @@ function NotificationRow({
             {sizedName}
           </span>
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {typeLabel(alert.type)}
+            {typeLabel(alert.type, alert.message)}
           </span>
         </div>
         <p
-          className="mt-1 line-clamp-2 text-sm leading-snug"
+          className="mt-1 text-sm leading-snug"
           style={{ color: "var(--text-secondary)" }}
         >
           {displayMessage}
@@ -109,24 +124,23 @@ function NotificationRow({
         </p>
       </div>
 
-      {unread && (
-        <button
-          type="button"
-          disabled={marking}
-          onClick={(e) => {
-            e.stopPropagation();
-            onMarkRead(alert.id);
-          }}
-          className="absolute right-3 top-3 rounded-md px-2 py-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 disabled:opacity-50"
-          style={{
-            color: "var(--text-secondary)",
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-          }}
-        >
-          {marking ? "…" : "Mark as read"}
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={marking}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (unread) onMarkRead(alert.id);
+          else onMarkUnread(alert.id);
+        }}
+        className="absolute right-3 top-3 rounded-md px-2 py-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 disabled:opacity-50"
+        style={{
+          color: "var(--text-secondary)",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+        }}
+      >
+        {marking ? "…" : unread ? "Mark as read" : "Mark as unread"}
+      </button>
     </div>
   );
 }
@@ -207,9 +221,10 @@ export default function NotificationsPopover({
     };
   }, [open, onClose, anchorRef]);
 
-  async function markRead(alertIds?: string[]) {
-    const body =
+  async function markRead(alertIds?: string[], unread = false) {
+    const body: { alertIds?: string[]; unread?: boolean } =
       alertIds && alertIds.length > 0 ? { alertIds } : {};
+    if (unread) body.unread = true;
     const res = await fetch("/api/alerts/mark-read", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -227,6 +242,25 @@ export default function NotificationsPopover({
     setMarkingId(id);
     try {
       const ok = await markRead([id]);
+      if (!ok) {
+        setAlerts(previous);
+        onUnreadChange();
+      }
+    } catch {
+      setAlerts(previous);
+      onUnreadChange();
+    } finally {
+      setMarkingId(null);
+    }
+  }
+
+  async function handleMarkUnread(id: string) {
+    const previous = alerts;
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, readAt: null } : a)));
+    onUnreadChange();
+    setMarkingId(id);
+    try {
+      const ok = await markRead([id], true);
       if (!ok) {
         setAlerts(previous);
         onUnreadChange();
@@ -276,7 +310,7 @@ export default function NotificationsPopover({
           top: panelPosition?.top ?? 0,
           left: panelPosition?.left ?? 0,
           width: PANEL_WIDTH,
-          maxHeight: "min(480px, 70dvh)",
+          maxHeight: "70dvh",
           background: "var(--surface)",
           border: "1px solid var(--border)",
           visibility: panelPosition ? "visible" : "hidden",
@@ -345,6 +379,7 @@ export default function NotificationsPopover({
                 alert={alert}
                 marking={markingId === alert.id}
                 onMarkRead={(id) => void handleMarkOne(id)}
+                onMarkUnread={(id) => void handleMarkUnread(id)}
               />
             ))
           )}

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { StockMovementType, QuantityUnit, UserRole } from "@prisma/client";
+import { StockMovementType, QuantityUnit, UserRole, ProductCategory } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth/password";
 import { getPrismaClient } from "../src/lib/prisma";
 
@@ -66,10 +66,12 @@ async function main() {
         tenantId: tenant.id,
         name: spirit.name,
         sku: spirit.sku,
+        category: ProductCategory.SPIRIT,
         bottleSizeMl: spirit.bottleSizeMl,
         defaultPourMl: spirit.defaultPourMl,
       },
       update: {
+        category: ProductCategory.SPIRIT,
         bottleSizeMl: spirit.bottleSizeMl,
         defaultPourMl: spirit.defaultPourMl,
       },

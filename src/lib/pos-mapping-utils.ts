@@ -1,14 +1,13 @@
-import { Prisma } from "@prisma/client";
-import { FIXED_POUR_OPTIONS_ML } from "@/lib/mapping-sale-size";
-import { isBeerBottleSize } from "@/lib/product-naming";
+import { Prisma, ProductCategory } from "@prisma/client";
+import { draftPourSizesForCategory } from "@/lib/product-category";
 
 export const DRAFT_SUPPRESSED_PREFIX = "__draft_suppressed__:";
 
-export function draftPourSizesForBottle(bottleSizeMl: number): number[] {
-  if (isBeerBottleSize(bottleSizeMl)) {
-    return [bottleSizeMl];
-  }
-  return [...FIXED_POUR_OPTIONS_ML, bottleSizeMl];
+export function draftPourSizesForBottle(
+  bottleSizeMl: number,
+  category: ProductCategory = ProductCategory.SPIRIT,
+): number[] {
+  return draftPourSizesForCategory(category, bottleSizeMl);
 }
 
 export function isPosItemConfigured(posItemId: string | null | undefined): boolean {

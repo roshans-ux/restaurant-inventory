@@ -57,7 +57,7 @@ export async function syncLowStockAlerts(productId: string): Promise<void> {
   const [config, currentMl] = await Promise.all([
     prisma.reorderConfig.findUnique({
       where: { productId },
-      include: { product: true },
+      include: { product: { include: { vendors: { select: { id: true } } } } },
     }),
     getCurrentStockMl(productId),
   ]);
@@ -104,7 +104,7 @@ export async function syncLowStockAlerts(productId: string): Promise<void> {
     thresholdBottles,
     bottleSizeMl,
     reorderQuantity: config.reorderQuantity,
-    vendorId: config.product.vendorId,
+    vendorId: config.product.vendorId ?? config.product.vendors[0]?.id ?? null,
   });
 }
 

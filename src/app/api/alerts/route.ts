@@ -3,12 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
+import { syncPaymentReminders } from "@/lib/payment-reminders";
 
 export async function GET(request: NextRequest) {
   const startedAt = Date.now();
   const session = await requireApiSession(request);
   if (!isSession(session)) return session;
   try {
+    await syncPaymentReminders(session.tenantId);
     const alerts = await prisma.alert.findMany({
       where: {
         resolvedAt: null,

@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState, FormEvent, useRef } from "react";
 import { GitBranch, Plus, Trash2 } from "lucide-react";
 import BottleSelectDropdown from "@/components/admin/BottleSelectDropdown";
+import { ProductCategory } from "@prisma/client";
 import {
-  FIXED_POUR_OPTIONS_ML,
   formatMappingSaleSize,
   isFullBottlePour,
 } from "@/lib/mapping-sale-size";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
-import { formatBottleSizeLabel, isBeerBottleSize } from "@/lib/product-naming";
+import { formatBottleSizeLabel } from "@/lib/product-naming";
+import { isFullUnitSaleCategory, straightPourOptionsMl } from "@/lib/product-category";
 import { isPosItemConfigured } from "@/lib/pos-mapping-utils";
 import { formatActivityDate, formatActivityTime } from "@/lib/stock-activity-format";
 import { getApiErrorMessage } from "@/lib/http";
@@ -17,14 +18,20 @@ import { getApiErrorMessage } from "@/lib/http";
 const MAPPINGS_VISIBLE_ROWS = 10;
 const MAPPING_ROW_HEIGHT = "2.75rem";
 
-type Product = { id: string; name: string; defaultPourMl: string; bottleSizeMl: string };
+type Product = {
+  id: string;
+  name: string;
+  defaultPourMl: string;
+  bottleSizeMl: string;
+  category: ProductCategory;
+};
 type Mapping = {
   id: string;
   posItemId: string | null;
   pourMl: string;
   createdAt: string;
   updatedAt: string;
-  product: { id: string; name: string; bottleSizeMl: string };
+  product: { id: string; name: string; bottleSizeMl: string; category: ProductCategory };
 };
 
 type MappingSortField = "posItemId" | "bottle" | "saleSize" | "timestamp";
@@ -203,20 +210,24 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
   );
 
   const selectedBottleSizeMl = selectedProduct ? Number(selectedProduct.bottleSizeMl) : null;
-  const selectedIsBeer =
-    selectedBottleSizeMl != null && isBeerBottleSize(selectedBottleSizeMl);
+  const selectedCategory = selectedProduct?.category ?? ProductCategory.SPIRIT;
+  const selectedIsUnitSale = Boolean(selectedProduct && isFullUnitSaleCategory(selectedCategory));
+  const pourOptions =
+    selectedBottleSizeMl != null
+      ? Array.from(new Set(straightPourOptionsMl(selectedCategory, selectedBottleSizeMl)))
+      : [30, 60, 90];
 
   useEffect(() => {
-    if (selectedIsBeer && selectedBottleSizeMl != null && pourMl !== selectedBottleSizeMl) {
+    if (selectedIsUnitSale && selectedBottleSizeMl != null && pourMl !== selectedBottleSizeMl) {
       setPourMl(selectedBottleSizeMl);
     }
-  }, [selectedIsBeer, selectedBottleSizeMl, pourMl]);
+  }, [selectedIsUnitSale, selectedBottleSizeMl, pourMl]);
 
   const visibleMappings = useMemo(() => {
     const query = mappingsSearch.trim().toLowerCase();
     let rows = mappings.filter((m) => {
       const bottleSizeMl = Number(m.product.bottleSizeMl);
-      if (!isBeerBottleSize(bottleSizeMl)) return true;
+      if (!isFullUnitSaleCategory(m.product.category)) return true;
       return Number(m.pourMl) === bottleSizeMl;
     });
     if (query) {
@@ -294,14 +305,19 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
     const nextProduct = products.find((p) => p.id === id);
     const nextBottleSize = nextProduct ? Number(nextProduct.bottleSizeMl) : null;
 
-    if (nextBottleSize != null && isBeerBottleSize(nextBottleSize)) {
+    if (nextProduct && isFullUnitSaleCategory(nextProduct.category) && nextBottleSize != null) {
       setPourMl(nextBottleSize);
-    } else if (
-      prevBottleSize != null &&
-      isFullBottlePour(pourMl, prevBottleSize) &&
-      nextBottleSize != null
-    ) {
-      setPourMl(nextBottleSize);
+    } else if (nextProduct && nextBottleSize != null) {
+      const options = straightPourOptionsMl(nextProduct.category, nextBottleSize);
+      if (
+        prevBottleSize != null &&
+        isFullBottlePour(pourMl, prevBottleSize) &&
+        options.includes(nextBottleSize)
+      ) {
+        setPourMl(nextBottleSize);
+      } else if (!options.includes(pourMl)) {
+        setPourMl(options[0] ?? nextBottleSize);
+      }
     }
 
     setSelectedProductId(id);
@@ -451,70 +467,31 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
             </span>
           </label>
 
+          {!selectedIsUnitSale && (
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
               Sale Size
             </span>
-            {selectedIsBeer && selectedBottleSizeMl != null ? (
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled
-                  className="rounded-lg px-4 py-2 text-sm font-medium"
-                  style={{
-                    background: "var(--accent-dim)",
-                    color: "var(--accent)",
-                    border: "1px solid rgba(245,166,35,0.3)",
-                  }}
-                >
-                  {formatMappingSaleSize(selectedBottleSizeMl, selectedBottleSizeMl)}
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {FIXED_POUR_OPTIONS_ML.map((ml) => (
+                {pourOptions.map((ml) => (
                   <button
                     key={ml}
                     type="button"
+                    disabled={!selectedProduct}
                     onClick={() => setPourMl(ml)}
-                    className="rounded-lg px-4 py-2 text-sm font-medium transition-all"
+                    className="rounded-lg px-4 py-2 text-sm font-medium transition-all disabled:opacity-40"
                     style={{
                       background: pourMl === ml ? "var(--accent-dim)" : "var(--surface-elevated)",
                       color: pourMl === ml ? "var(--accent)" : "var(--text-secondary)",
                       border: `1px solid ${pourMl === ml ? "rgba(245,166,35,0.3)" : "var(--border)"}`,
                     }}
                   >
-                    {formatMappingSaleSize(ml)}
+                    {formatMappingSaleSize(ml, selectedBottleSizeMl)}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  disabled={!selectedProduct}
-                  onClick={() => selectedBottleSizeMl != null && setPourMl(selectedBottleSizeMl)}
-                  className="rounded-lg px-4 py-2 text-sm font-medium transition-all disabled:opacity-40"
-                  style={{
-                    background:
-                      selectedBottleSizeMl != null && pourMl === selectedBottleSizeMl
-                        ? "var(--accent-dim)"
-                        : "var(--surface-elevated)",
-                    color:
-                      selectedBottleSizeMl != null && pourMl === selectedBottleSizeMl
-                        ? "var(--accent)"
-                        : "var(--text-secondary)",
-                    border: `1px solid ${
-                      selectedBottleSizeMl != null && pourMl === selectedBottleSizeMl
-                        ? "rgba(245,166,35,0.3)"
-                        : "var(--border)"
-                    }`,
-                  }}
-                >
-                  {selectedBottleSizeMl != null
-                    ? formatMappingSaleSize(selectedBottleSizeMl, selectedBottleSizeMl)
-                    : "1 bottle"}
-                </button>
               </div>
-            )}
           </label>
+          )}
         </div>
 
         {error && <p className="mt-3 text-sm" style={{ color: "var(--red)" }}>{error}</p>}

@@ -21,12 +21,15 @@ type TenantInfo = {
   whatsappConnected?: boolean;
   slippageTolerancePercent: number;
   shiftSchedule: Record<DayKey, DayShift | null>;
+  paymentReminderDays: number;
 };
 
 type Vendor = {
   id: string;
   name: string;
   whatsappNumber: string;
+  email?: string | null;
+  creditPeriodDays?: number | null;
   products?: { id: string; name: string; sku: string | null }[];
 };
 
@@ -83,12 +86,17 @@ export default function SettingsPage() {
   const [whatsappConnected, setWhatsappConnected] = useState(false);
   const [vendorName, setVendorName] = useState("");
   const [vendorPhone, setVendorPhone] = useState("");
+  const [vendorEmail, setVendorEmail] = useState("");
+  const [vendorCreditDays, setVendorCreditDays] = useState("");
   const [vendorError, setVendorError] = useState("");
   const [addingVendor, setAddingVendor] = useState(false);
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [editVendorName, setEditVendorName] = useState("");
   const [editVendorPhone, setEditVendorPhone] = useState("");
+  const [editVendorEmail, setEditVendorEmail] = useState("");
+  const [editVendorCreditDays, setEditVendorCreditDays] = useState("");
   const [savingVendor, setSavingVendor] = useState(false);
+  const [paymentReminderDays, setPaymentReminderDays] = useState("3");
 
   async function loadAll() {
     const [meRes, vendorsRes] = await Promise.all([
@@ -113,10 +121,12 @@ export default function SettingsPage() {
         adminWhatsappNumber: t.adminWhatsappNumber ?? null,
         slippageTolerancePercent: t.slippageTolerancePercent ?? 10,
         shiftSchedule: t.shiftSchedule ?? {},
+        paymentReminderDays: t.paymentReminderDays ?? 3,
       });
       setAdminWhatsapp(t.adminWhatsappNumber ?? "");
       setWhatsappConnected(Boolean(t.whatsappConnected));
       setSlippage(String(t.slippageTolerancePercent ?? 10));
+      setPaymentReminderDays(String(t.paymentReminderDays ?? 3));
       setSchedule(t.shiftSchedule ?? {});
     }
     if (vendorsData.ok) {
@@ -151,6 +161,7 @@ export default function SettingsPage() {
     const previousSlippage = slippage;
     const previousSchedule = schedule;
     const previousAdminWhatsapp = adminWhatsapp;
+    const previousReminderDays = paymentReminderDays;
     setAdminWhatsappError("");
     const normalizedAdmin = adminWhatsapp.trim()
       ? normalizeIndianPhone(adminWhatsapp)
@@ -161,6 +172,7 @@ export default function SettingsPage() {
       return;
     }
     const nextSlippage = Math.round(Number(slippage));
+    const nextReminderDays = Math.min(30, Math.max(1, Math.round(Number(paymentReminderDays) || 3)));
     const nextSchedule = schedule;
     if (tenant) {
       setTenant({
@@ -168,6 +180,7 @@ export default function SettingsPage() {
         slippageTolerancePercent: nextSlippage,
         shiftSchedule: nextSchedule,
         adminWhatsappNumber: normalizedAdmin,
+        paymentReminderDays: nextReminderDays,
       });
     }
     setSettingsMsg("Saved");
@@ -179,6 +192,7 @@ export default function SettingsPage() {
           slippageTolerancePercent: nextSlippage,
           shiftSchedule: nextSchedule,
           adminWhatsappNumber: normalizedAdmin,
+          paymentReminderDays: nextReminderDays,
         }),
       });
       const data = await readJsonResponse<{
@@ -187,6 +201,7 @@ export default function SettingsPage() {
           slippageTolerancePercent?: number;
           shiftSchedule?: Record<DayKey, DayShift | null>;
           adminWhatsappNumber?: string | null;
+          paymentReminderDays?: number;
         };
         error?: { message?: string; details?: unknown };
       }>(res);
@@ -200,9 +215,13 @@ export default function SettingsPage() {
             data.data.adminWhatsappNumber !== undefined
               ? data.data.adminWhatsappNumber
               : normalizedAdmin,
+          paymentReminderDays: data.data.paymentReminderDays ?? nextReminderDays,
         });
         if (data.data.adminWhatsappNumber !== undefined) {
           setAdminWhatsapp(data.data.adminWhatsappNumber ?? "");
+        }
+        if (data.data.paymentReminderDays !== undefined) {
+          setPaymentReminderDays(String(data.data.paymentReminderDays));
         }
       }
       setSettingsMsg("Saved");
@@ -211,6 +230,7 @@ export default function SettingsPage() {
       setSlippage(previousSlippage);
       setSchedule(previousSchedule);
       setAdminWhatsapp(previousAdminWhatsapp);
+      setPaymentReminderDays(previousReminderDays);
       setSettingsMsg(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSavingSettings(false);
@@ -231,7 +251,12 @@ export default function SettingsPage() {
       const res = await fetch("/api/vendors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: vendorName, whatsappNumber }),
+        body: JSON.stringify({
+          name: vendorName,
+          whatsappNumber,
+          creditPeriodDays: vendorCreditDays.trim() === "" ? null : Math.round(Number(vendorCreditDays)),
+          email: vendorEmail.trim() || null,
+        }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
@@ -249,6 +274,8 @@ export default function SettingsPage() {
       }
       setVendorName("");
       setVendorPhone("");
+      setVendorEmail("");
+      setVendorCreditDays("");
     } catch (err) {
       setVendorError(err instanceof Error ? err.message : "Failed to add vendor");
     } finally {
@@ -279,6 +306,8 @@ export default function SettingsPage() {
     setEditingVendorId(v.id);
     setEditVendorName(v.name);
     setEditVendorPhone(v.whatsappNumber);
+    setEditVendorEmail(v.email ?? "");
+    setEditVendorCreditDays(v.creditPeriodDays != null ? String(v.creditPeriodDays) : "");
     setVendorError("");
   }
 
@@ -286,6 +315,8 @@ export default function SettingsPage() {
     setEditingVendorId(null);
     setEditVendorName("");
     setEditVendorPhone("");
+    setEditVendorEmail("");
+    setEditVendorCreditDays("");
     setVendorError("");
   }
 
@@ -304,7 +335,12 @@ export default function SettingsPage() {
       const res = await fetch(`/api/vendors/${editingVendorId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editVendorName, whatsappNumber }),
+        body: JSON.stringify({
+          name: editVendorName,
+          whatsappNumber,
+          creditPeriodDays: editVendorCreditDays.trim() === "" ? null : Math.round(Number(editVendorCreditDays)),
+          email: editVendorEmail.trim() || null,
+        }),
       });
       const data = await readJsonResponse<{
         ok?: boolean;
@@ -318,7 +354,13 @@ export default function SettingsPage() {
           prev
             .map((v) =>
               v.id === editingVendorId
-                ? { ...v, name: vendor.name, whatsappNumber: vendor.whatsappNumber }
+                ? {
+                    ...v,
+                    name: vendor.name,
+                    whatsappNumber: vendor.whatsappNumber,
+                    email: vendor.email,
+                    creditPeriodDays: vendor.creditPeriodDays,
+                  }
                 : v,
             )
             .sort((a, b) => a.name.localeCompare(b.name)),
@@ -537,6 +579,31 @@ export default function SettingsPage() {
             </div>
             </div>
 
+            <div
+              className="rounded-xl p-5 space-y-4"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <p className="text-sm font-medium">Notifications</p>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  Remind me before payment is due (days)
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={paymentReminderDays}
+                  onChange={(e) => setPaymentReminderDays(e.target.value)}
+                  className="rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </label>
+            </div>
+
             {settingsMsg && (
               <p className="text-xs" style={{ color: settingsMsg.includes("failed") ? "var(--red)" : "var(--green)" }}>
                 {settingsMsg}
@@ -594,6 +661,36 @@ export default function SettingsPage() {
                             color: "var(--text-primary)",
                           }}
                         />
+                        <input
+                          type="email"
+                          value={editVendorEmail}
+                          onChange={(e) => setEditVendorEmail(e.target.value)}
+                          placeholder="Email (recommended)"
+                          className="sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
+                          style={{
+                            background: "var(--surface)",
+                            border: "1px solid var(--border)",
+                            color: "var(--text-primary)",
+                          }}
+                        />
+                        <label className="sm:col-span-2 flex flex-col gap-1">
+                          <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                            Credit Period (days)
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={editVendorCreditDays}
+                            onChange={(e) => setEditVendorCreditDays(e.target.value)}
+                            placeholder="Optional"
+                            className="rounded-lg px-3 py-2 text-sm outline-none"
+                            style={{
+                              background: "var(--surface)",
+                              border: "1px solid var(--border)",
+                              color: "var(--text-primary)",
+                            }}
+                          />
+                        </label>
                         <div className="sm:col-span-2 flex gap-2">
                           <button
                             type="submit"
@@ -619,6 +716,13 @@ export default function SettingsPage() {
                           <p className="text-sm font-medium">{v.name}</p>
                           <p className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
                             {v.whatsappNumber}
+                          </p>
+                          <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            Email: {v.email?.trim() ? v.email : "Not set"}
+                          </p>
+                          <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            Credit period:{" "}
+                            {v.creditPeriodDays != null ? `${v.creditPeriodDays} days` : "Not set"}
                           </p>
                           {v.products && v.products.length > 0 ? (
                             <p className="mt-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -679,6 +783,31 @@ export default function SettingsPage() {
                 onChange={(e) => setVendorPhone(e.target.value)}
                 required
                 className="rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <input
+                type="email"
+                placeholder="Email (recommended)"
+                value={vendorEmail}
+                onChange={(e) => setVendorEmail(e.target.value)}
+                className="sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <input
+                type="number"
+                min={0}
+                placeholder="Credit Period (days)"
+                value={vendorCreditDays}
+                onChange={(e) => setVendorCreditDays(e.target.value)}
+                className="sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
                 style={{
                   background: "var(--surface-elevated)",
                   border: "1px solid var(--border)",

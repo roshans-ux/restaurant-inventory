@@ -16,14 +16,14 @@ export function buildOrderTxt(
   vendor: VendorInfo,
   lines: OrderLine[],
 ): string {
-  const items = lines
-    .map((l) => `${l.productName} — ${l.quantityBottles} bottles`)
-    .join("\n");
+  const items = lines.map((l) => l.productName).join("\n");
   return `Hi ${vendor.name}, this is ${venue.name}.
 
 Please process the following order:
 
 ${items}
+
+Quantities to be confirmed over call.
 
 Thank you.`;
 }
@@ -70,7 +70,52 @@ export function vendorFileSlug(name: string): string {
     .replace(/^-|-$/g, "") || "vendor";
 }
 
-export function txtFilename(prefix: string, vendorName: string): string {
-  const date = new Date().toISOString().slice(0, 10);
-  return `${prefix}-${vendorFileSlug(vendorName)}-${date}.txt`;
+export function buildOrderEmail(
+  venueName: string,
+  vendorName: string,
+  skuNames: string[],
+): string {
+  return `Hi ${vendorName},
+
+Please process the following order from ${venueName}:
+
+${skuNames.join("\n")}
+
+Quantities to be confirmed over call.
+
+Thank you,
+${venueName}`;
+}
+
+export function buildCancelEmail(
+  venueName: string,
+  vendorName: string,
+  skuNames: string[],
+): string {
+  return `Hi ${vendorName},
+
+We need to cancel the following order from ${venueName}:
+
+${skuNames.join("\n")}
+
+Sorry for the inconvenience.
+
+Thank you,
+${venueName}`;
+}
+
+export function buildModifyEmail(
+  venueName: string,
+  vendorName: string,
+  productName: string,
+  quantityBottles: number,
+): string {
+  return `Hi ${vendorName},
+
+We need to update our order:
+
+${productName} — updated to ${quantityBottles} bottles
+
+Thank you,
+${venueName}`;
 }
