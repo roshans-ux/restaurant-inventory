@@ -32,7 +32,7 @@ type StockOrder = {
   logs?: { id: string; message: string; createdAt: string }[];
 };
 
-const CANCELLABLE = new Set(["PENDING", "MODIFIED", "PLACED"]);
+const CANCELLABLE = new Set(["PENDING", "MODIFIED", "PLACED", "AWAITING_APPROVAL"]);
 
 export default function StockOrdersPage() {
   const [orders, setOrders] = useState<StockOrder[]>([]);
@@ -83,7 +83,10 @@ export default function StockOrdersPage() {
   const filtered = useMemo(() => {
     let list = orders;
     if (tab === "pending") {
-      list = orders.filter((o) => o.status === "PENDING" || o.status === "MODIFIED");
+      list = orders.filter(
+        (o) =>
+          o.status === "PENDING" || o.status === "MODIFIED" || o.status === "AWAITING_APPROVAL",
+      );
     } else if (tab === "placed") {
       list = orders.filter((o) => o.status === "PLACED");
     } else if (tab === "cancelled") {
@@ -113,6 +116,7 @@ export default function StockOrdersPage() {
   }, [orders, tab, sortField, sortDirection]);
 
   const readOnly = tab === "cancelled";
+  const awaitingOwner = orders.some((o) => o.status === "AWAITING_APPROVAL");
 
   function onSort(field: SortField) {
     if (sortField === field) {
@@ -304,12 +308,14 @@ export default function StockOrdersPage() {
       });
       const data = await readJsonResponse<{
         ok?: boolean;
-        data?: { emailWarnings?: string[] };
+        data?: { emailWarnings?: string[]; awaitingOwnerApproval?: boolean };
         error?: { message?: string; details?: unknown };
       }>(res);
       if (!res.ok) throw new Error(getApiErrorMessage(data, "Place failed"));
       if (data.data?.emailWarnings?.length) {
         setNotice(data.data.emailWarnings.join(" "));
+      } else if (data.data?.awaitingOwnerApproval) {
+        setNotice("Vendors assigned. Orders will send after bar owner WhatsApp approval.");
       }
       setSelected(new Set());
       setPlaceOpen(false);
@@ -361,6 +367,34 @@ export default function StockOrdersPage() {
     }
   }
 
+  async function sendAnyway(orderId: string) {
+    setActing(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await fetch(`/api/stock-orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sendAnyway: true }),
+      });
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        data?: { emailWarnings?: string[]; sentAnyway?: boolean };
+        error?: { message?: string; details?: unknown };
+      }>(res);
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Send failed"));
+      setNotice("Order sent to vendor directly.");
+      if (data.data?.emailWarnings?.length) {
+        setNotice(`Order sent to vendor directly. ${data.data.emailWarnings.join(" ")}`);
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Send failed");
+    } finally {
+      setActing(false);
+    }
+  }
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "all", label: "All" },
     { key: "pending", label: "Pending" },
@@ -402,6 +436,19 @@ export default function StockOrdersPage() {
           </div>
         )}
       </div>
+
+      {awaitingOwner && (
+        <div
+          className="mb-4 rounded-xl px-4 py-3 text-sm"
+          style={{
+            background: "var(--accent-dim)",
+            border: "1px solid rgba(245, 166, 35, 0.35)",
+            color: "var(--accent)",
+          }}
+        >
+          Orders are pending bar owner WhatsApp approval.
+        </div>
+      )}
 
       <div className="mb-4 flex gap-1">
         {tabs.map((t) => (
@@ -595,22 +642,26 @@ export default function StockOrdersPage() {
                         className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
                         style={{
                           background:
-                            o.status === "PENDING" || o.status === "MODIFIED"
+                            o.status === "AWAITING_APPROVAL"
                               ? "var(--accent-dim)"
-                              : o.status === "PLACED"
-                                ? "var(--green-dim)"
-                                : o.status === "CANCELLED"
-                                  ? "var(--surface)"
-                                  : "var(--surface)",
+                              : o.status === "PENDING" || o.status === "MODIFIED"
+                                ? "var(--accent-dim)"
+                                : o.status === "PLACED"
+                                  ? "var(--green-dim)"
+                                  : o.status === "CANCELLED"
+                                    ? "var(--surface)"
+                                    : "var(--surface)",
                           color:
-                            o.status === "PENDING" || o.status === "MODIFIED"
+                            o.status === "AWAITING_APPROVAL"
                               ? "var(--accent)"
-                              : o.status === "PLACED"
-                                ? "var(--green)"
-                                : "var(--text-muted)",
+                              : o.status === "PENDING" || o.status === "MODIFIED"
+                                ? "var(--accent)"
+                                : o.status === "PLACED"
+                                  ? "var(--green)"
+                                  : "var(--text-muted)",
                         }}
                       >
-                        {o.status}
+                        {o.status === "AWAITING_APPROVAL" ? "Awaiting owner approval" : o.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
@@ -621,17 +672,30 @@ export default function StockOrdersPage() {
                     </td>
                     {!readOnly && (
                       <td className="px-4 py-3 text-right">
-                        {canCancel && (
-                          <button
-                            type="button"
-                            onClick={() => cancelOrder(o.id)}
-                            disabled={acting}
-                            className="text-xs disabled:opacity-50"
-                            style={{ color: "var(--red)" }}
-                          >
-                            Cancel
-                          </button>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {o.status === "AWAITING_APPROVAL" && (
+                            <button
+                              type="button"
+                              onClick={() => sendAnyway(o.id)}
+                              disabled={acting}
+                              className="text-xs disabled:opacity-50"
+                              style={{ color: "var(--accent)" }}
+                            >
+                              Send anyway
+                            </button>
+                          )}
+                          {canCancel && (
+                            <button
+                              type="button"
+                              onClick={() => cancelOrder(o.id)}
+                              disabled={acting}
+                              className="text-xs disabled:opacity-50"
+                              style={{ color: "var(--red)" }}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>

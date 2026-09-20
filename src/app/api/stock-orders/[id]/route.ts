@@ -7,10 +7,12 @@ import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { buildCancelEmail, buildModifyEmail } from "@/lib/vendor-messages";
 import { trySendVendorEmail } from "@/lib/email/vendor-order";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
+import { sendVendorPlaceEmails } from "@/lib/vendor-place-emails";
 
 const patchSchema = z.object({
   quantityBottles: z.number().int().positive().optional(),
   cancel: z.boolean().optional(),
+  sendAnyway: z.boolean().optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -25,6 +27,7 @@ const CANCELLABLE_STATUSES = [
   StockOrderStatus.PENDING,
   StockOrderStatus.MODIFIED,
   StockOrderStatus.PLACED,
+  StockOrderStatus.AWAITING_APPROVAL,
 ] as const;
 
 const orderInclude = {
@@ -52,6 +55,42 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     });
     if (!existing) {
       return apiError("ORDER_NOT_FOUND", "Order not found", 404);
+    }
+
+    if (payload.sendAnyway) {
+      if (existing.status !== StockOrderStatus.AWAITING_APPROVAL) {
+        return apiError("ORDER_NOT_AWAITING", "Order is not awaiting owner approval", 400);
+      }
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: session.tenantId },
+        select: { name: true },
+      });
+      if (!tenant) {
+        return apiError("TENANT_NOT_FOUND", "Venue not found", 404);
+      }
+      const order = await prisma.stockOrder.update({
+        where: { id },
+        data: { status: StockOrderStatus.PLACED, placedAt: new Date() },
+        include: {
+          product: { select: { name: true } },
+          vendor: { select: { id: true, name: true, email: true } },
+          notifiedVendors: { select: { id: true, name: true, email: true } },
+        },
+      });
+      const emailWarnings = await sendVendorPlaceEmails({
+        tenantName: tenant.name,
+        orders: [order],
+        extraLog: "Order sent manually by storekeeper without owner WhatsApp confirmation.",
+        perVendorLogs: false,
+      });
+      return apiOk({
+        order: await prisma.stockOrder.findFirst({
+          where: { id, tenantId: session.tenantId },
+          include: orderInclude,
+        }),
+        emailWarnings,
+        sentAnyway: true,
+      });
     }
 
     if (payload.cancel) {

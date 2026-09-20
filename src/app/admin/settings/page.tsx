@@ -465,6 +465,10 @@ export default function SettingsPage() {
                   </p>
                 )}
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  To receive WhatsApp order approvals, send *join twilio-trial* to +1 (737)
+                  250-8034 on WhatsApp from the number above.
+                </p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   {whatsappConnected
                     ? "Low-stock order tickets will be sent to this number for Place or Cancel."
                     : "Save the number now. No WhatsApp is sent until WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID are set, then the server is restarted."}

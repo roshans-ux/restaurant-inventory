@@ -1,8 +1,12 @@
 import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentStockMl, isBelowThreshold } from "@/lib/inventory";
-import { sendAdminReorderPrompt } from "@/lib/whatsapp/client";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
+import {
+  ensureOrderBatchWindow,
+  flushDueOrderBatches,
+  isOwnerWhatsAppPath,
+} from "@/lib/order-batch";
 
 export type PendingStockOrderContext = {
   currentMl: number;
@@ -17,6 +21,8 @@ export async function maybeCreatePendingStockOrder(
   tenantId: string,
   known?: PendingStockOrderContext,
 ): Promise<void> {
+  await flushDueOrderBatches(tenantId);
+
   let currentMl = known?.currentMl;
   let thresholdBottles = known?.thresholdBottles;
   let bottleSizeMl = known?.bottleSizeMl;
@@ -49,7 +55,13 @@ export async function maybeCreatePendingStockOrder(
     where: {
       tenantId,
       productId,
-      status: StockOrderStatus.PENDING,
+      status: {
+        in: [
+          StockOrderStatus.PENDING,
+          StockOrderStatus.MODIFIED,
+          StockOrderStatus.AWAITING_APPROVAL,
+        ],
+      },
     },
   });
   if (existingPending) return;
@@ -75,17 +87,7 @@ export async function maybeCreatePendingStockOrder(
     "Order created automatically (stock below threshold)",
   );
 
-  try {
-    await sendAdminReorderPrompt({
-      tenantId,
-      stockOrderId: order.id,
-      adminWhatsappNumber: order.tenant.adminWhatsappNumber,
-      venueName: order.tenant.name,
-      productName: order.product.name,
-      quantityBottles: order.quantityBottles,
-      vendorName: order.vendor?.name ?? null,
-    });
-  } catch (error) {
-    console.error("[whatsapp] admin reorder prompt failed", error);
+  if (isOwnerWhatsAppPath(order.tenant.adminWhatsappNumber)) {
+    await ensureOrderBatchWindow(tenantId);
   }
 }

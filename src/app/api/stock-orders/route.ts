@@ -4,12 +4,15 @@ import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
-import {
-  buildCancelEmail,
-  buildOrderEmail,
-} from "@/lib/vendor-messages";
+import { buildCancelEmail } from "@/lib/vendor-messages";
 import { trySendVendorEmail } from "@/lib/email/vendor-order";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
+import { sendVendorPlaceEmails } from "@/lib/vendor-place-emails";
+import {
+  ensureOrderBatchWindow,
+  flushDueOrderBatches,
+  isOwnerWhatsAppPath,
+} from "@/lib/order-batch";
 
 const orderInclude = {
   product: {
@@ -39,7 +42,9 @@ export async function GET(request: NextRequest) {
   } = { tenantId: session.tenantId };
 
   if (statusFilter === "pending") {
-    where.status = { in: [StockOrderStatus.PENDING, StockOrderStatus.MODIFIED] };
+    where.status = {
+      in: [StockOrderStatus.PENDING, StockOrderStatus.MODIFIED, StockOrderStatus.AWAITING_APPROVAL],
+    };
   } else if (statusFilter === "placed") {
     where.status = StockOrderStatus.PLACED;
   } else if (statusFilter === "cancelled") {
@@ -51,6 +56,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    await flushDueOrderBatches(session.tenantId);
     const orders = await prisma.stockOrder.findMany({
       where,
       include: orderInclude,
@@ -86,7 +92,7 @@ export async function POST(request: NextRequest) {
     const [tenant, orders] = await Promise.all([
       prisma.tenant.findUnique({
         where: { id: session.tenantId },
-        select: { name: true },
+        select: { name: true, adminWhatsappNumber: true },
       }),
       prisma.stockOrder.findMany({
         where: {
@@ -100,6 +106,7 @@ export async function POST(request: NextRequest) {
                     StockOrderStatus.PENDING,
                     StockOrderStatus.MODIFIED,
                     StockOrderStatus.PLACED,
+                    StockOrderStatus.AWAITING_APPROVAL,
                   ],
                 },
         },
@@ -157,6 +164,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const waitForOwner = isOwnerWhatsAppPath(tenant.adminWhatsappNumber);
       const skuNamesByVendor = new Map<string, Set<string>>();
 
       await prisma.$transaction(async (tx) => {
@@ -165,8 +173,8 @@ export async function POST(request: NextRequest) {
           await tx.stockOrder.update({
             where: { id: order.id },
             data: {
-              status: StockOrderStatus.PLACED,
-              placedAt: now,
+              status: waitForOwner ? order.status : StockOrderStatus.PLACED,
+              placedAt: waitForOwner ? order.placedAt : now,
               vendorId: vendorIds[0] ?? null,
               notifiedVendors: { set: vendorIds.map((id) => ({ id })) },
             },
@@ -179,63 +187,35 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      const sendResultByVendor = new Map<string, "sent" | "missing" | "failed">();
-      for (const [vendorId, skuNames] of skuNamesByVendor) {
-        const vendor = vendorById.get(vendorId);
-        if (!vendor) continue;
-        const email = vendor.email?.trim() ?? "";
-        if (!email) {
-          sendResultByVendor.set(vendorId, "missing");
-          continue;
-        }
-        const sent = await trySendVendorEmail({
-          to: email,
-          subject: `New Order from ${tenant.name}`,
-          text: buildOrderEmail(tenant.name, vendor.name, [...skuNames]),
+      if (waitForOwner) {
+        await ensureOrderBatchWindow(session.tenantId);
+        return apiOk({
+          updatedCount: orders.length,
+          notifiedCount: 0,
+          awaitingOwnerApproval: true,
+          emailWarnings,
         });
-        sendResultByVendor.set(vendorId, sent ? "sent" : "failed");
-        if (!sent) {
-          emailWarnings.push(
-            `Order placed but email could not be sent to ${vendor.name}. Check their email address in Settings.`,
-          );
-        }
       }
 
-      await prisma.$transaction(async (tx) => {
-        for (const order of orders) {
-          const vendorIds = assignmentByOrder.get(order.id)!;
-          for (const vid of vendorIds) {
-            const vendor = vendorById.get(vid);
-            if (!vendor) continue;
-            const result = sendResultByVendor.get(vid);
-            const email = vendor.email?.trim() ?? "";
-            if (result === "sent") {
-              await appendStockOrderLog(
-                tx,
-                order.id,
-                `Order placed. Email sent to: ${vendor.name} (${email})`,
-              );
-            } else if (result === "failed") {
-              await appendStockOrderLog(
-                tx,
-                order.id,
-                `Order placed. No email sent — email could not be sent to ${vendor.name} (${email}).`,
-              );
-            } else {
-              await appendStockOrderLog(
-                tx,
-                order.id,
-                `Order placed. No email sent — no email address on file for ${vendor.name}.`,
-              );
-            }
-          }
-        }
+      const placedOrders = await prisma.stockOrder.findMany({
+        where: { id: { in: orders.map((o) => o.id) } },
+        include: {
+          product: { select: { name: true } },
+          vendor: { select: { id: true, name: true, email: true } },
+          notifiedVendors: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      const warnings = await sendVendorPlaceEmails({
+        tenantName: tenant.name,
+        orders: placedOrders,
+        extraLog: "WhatsApp not configured. Vendor email sent directly.",
       });
 
       return apiOk({
         updatedCount: orders.length,
-        notifiedCount: [...sendResultByVendor.values()].filter((r) => r === "sent").length,
-        emailWarnings,
+        notifiedCount: skuNamesByVendor.size,
+        emailWarnings: warnings,
       });
     }
 
