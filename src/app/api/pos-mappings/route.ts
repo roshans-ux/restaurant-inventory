@@ -11,7 +11,7 @@ import {
   isPosItemConfigured,
 } from "@/lib/pos-draft-mappings";
 import { excludeDraftSuppressionMappings } from "@/lib/pos-mapping-utils";
-import { isAllowedStraightPour, isFullUnitSaleCategory } from "@/lib/product-category";
+import { isAllowedStraightPour, isFullUnitSaleProduct } from "@/lib/product-category";
 import {
   findPosItemConflict,
   posItemConflictMessage,
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         400,
       );
     }
-    if (isFullUnitSaleCategory(category)) {
+    if (isFullUnitSaleProduct(category, bottleSizeMl)) {
       const existingUnit = await prisma.posMenuMapping.findFirst({
         where: { tenantId: session.tenantId, productId: parsed.productId },
       });
@@ -153,7 +153,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const category = existing.product.category;
-    const isUnitSaleLocked = isFullUnitSaleCategory(category);
+    const isUnitSaleLocked = isFullUnitSaleProduct(category, Number(existing.product.bottleSizeMl));
 
     if (parsed.pourMl !== undefined && parsed.pourMl !== Number(existing.pourMl)) {
       if (isUnitSaleLocked) {

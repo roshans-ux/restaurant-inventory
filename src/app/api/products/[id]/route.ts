@@ -12,14 +12,10 @@ import {
   skuFromNameAndSize,
 } from "@/lib/product-naming";
 import { syncLowStockAlerts } from "@/lib/inventory";
-import {
-  ensureDraftMappingsForProduct,
-  reconcileFullUnitSaleMappings,
-  updateFullBottleDraftPourSize,
-} from "@/lib/pos-draft-mappings";
+import { syncMappingsAfterProductSave } from "@/lib/pos-draft-mappings";
 import {
   defaultPourMlForCategory,
-  isFullUnitSaleCategory,
+  isFullUnitSaleProduct,
   isValidSizeForCategory,
 } from "@/lib/product-category";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
@@ -124,8 +120,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         : undefined;
 
     const updated = await prisma.$transaction(async (tx) => {
-      const previousBottleSizeMl = Number(existing.bottleSizeMl);
-
       const product = await tx.product.update({
         where: { id },
         data: {
@@ -135,7 +129,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           bottleSizeMl: payload.bottleSizeMl,
           defaultPourMl:
             payload.defaultPourMl ??
-            (isFullUnitSaleCategory(nextCategory)
+            (isFullUnitSaleProduct(nextCategory, bottleSizeMl)
               ? bottleSizeMl
               : payload.category
                 ? defaultPourMlForCategory(nextCategory, bottleSizeMl)
@@ -172,37 +166,15 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         });
       }
 
-      const currentBottleSizeMl = Number(product.bottleSizeMl);
-      const currentCategory = product.category;
-
-      if (payload.bottleSizeMl !== undefined && payload.bottleSizeMl !== previousBottleSizeMl) {
-        await updateFullBottleDraftPourSize(
-          tx,
-          session.tenantId,
-          id,
-          previousBottleSizeMl,
-          payload.bottleSizeMl,
-          currentCategory,
-        );
-      } else if (isFullUnitSaleCategory(currentCategory)) {
-        await reconcileFullUnitSaleMappings(
-          tx,
-          session.tenantId,
-          id,
-          currentBottleSizeMl,
-          currentCategory,
-        );
-      } else {
-        await ensureDraftMappingsForProduct(
-          tx,
-          session.tenantId,
-          id,
-          currentBottleSizeMl,
-          currentCategory,
-        );
-      }
-
       return product;
+    });
+
+    await syncMappingsAfterProductSave({
+      tenantId: session.tenantId,
+      productId: id,
+      bottleSizeMl: Number(updated.bottleSizeMl),
+      category: updated.category,
+      previousBottleSizeMl: Number(existing.bottleSizeMl),
     });
 
     if (

@@ -10,7 +10,7 @@ import {
 } from "@/lib/mapping-sale-size";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
-import { isFullUnitSaleCategory, straightPourOptionsMl } from "@/lib/product-category";
+import { isFullUnitSaleProduct, straightPourOptionsMl } from "@/lib/product-category";
 import { isPosItemConfigured } from "@/lib/pos-mapping-utils";
 import { formatActivityDate, formatActivityTime } from "@/lib/stock-activity-format";
 import { getApiErrorMessage } from "@/lib/http";
@@ -211,7 +211,10 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
 
   const selectedBottleSizeMl = selectedProduct ? Number(selectedProduct.bottleSizeMl) : null;
   const selectedCategory = selectedProduct?.category ?? ProductCategory.SPIRIT;
-  const selectedIsUnitSale = Boolean(selectedProduct && isFullUnitSaleCategory(selectedCategory));
+  const selectedIsUnitSale = Boolean(
+    selectedProduct &&
+      isFullUnitSaleProduct(selectedCategory, Number(selectedProduct.bottleSizeMl)),
+  );
   const pourOptions =
     selectedBottleSizeMl != null
       ? Array.from(new Set(straightPourOptionsMl(selectedCategory, selectedBottleSizeMl)))
@@ -225,13 +228,14 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
 
   const visibleMappings = useMemo(() => {
     const query = mappingsSearch.trim().toLowerCase();
-    let rows = mappings.filter((m) => {
+    const unitFiltered = mappings.filter((m) => {
       const bottleSizeMl = Number(m.product.bottleSizeMl);
-      if (!isFullUnitSaleCategory(m.product.category)) return true;
+      if (!isFullUnitSaleProduct(m.product.category, bottleSizeMl)) return true;
       return Number(m.pourMl) === bottleSizeMl;
     });
+    let rows = unitFiltered;
     if (query) {
-      rows = mappings.filter((m) => {
+      rows = unitFiltered.filter((m) => {
         const saleSize = formatMappingSaleSize(
           Number(m.pourMl),
           Number(m.product.bottleSizeMl),
@@ -305,7 +309,7 @@ export default function StraightPoursTab({ active = true }: { active?: boolean }
     const nextProduct = products.find((p) => p.id === id);
     const nextBottleSize = nextProduct ? Number(nextProduct.bottleSizeMl) : null;
 
-    if (nextProduct && isFullUnitSaleCategory(nextProduct.category) && nextBottleSize != null) {
+    if (nextProduct && nextBottleSize != null && isFullUnitSaleProduct(nextProduct.category, nextBottleSize)) {
       setPourMl(nextBottleSize);
     } else if (nextProduct && nextBottleSize != null) {
       const options = straightPourOptionsMl(nextProduct.category, nextBottleSize);

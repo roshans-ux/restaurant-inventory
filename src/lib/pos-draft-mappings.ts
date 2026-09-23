@@ -1,5 +1,5 @@
 import { Prisma, ProductCategory } from "@prisma/client";
-import { draftPourSizesForCategory, isFullUnitSaleCategory } from "@/lib/product-category";
+import { draftPourSizesForCategory, isFullUnitSaleProduct } from "@/lib/product-category";
 import {
   draftSuppressedPosItemId,
   isDraftSuppressedPosItemId,
@@ -34,6 +34,11 @@ export async function ensureDraftMappingsForProduct(
   bottleSizeMl: number,
   category: ProductCategory,
 ) {
+  if (isFullUnitSaleProduct(category, bottleSizeMl)) {
+    await reconcileFullUnitSaleMappings(db, tenantId, productId, bottleSizeMl, category);
+    return;
+  }
+
   const pourSizes = draftPourSizesForCategory(category, bottleSizeMl);
   const existing = await db.posMenuMapping.findMany({
     where: { tenantId, productId },
@@ -50,9 +55,6 @@ export async function ensureDraftMappingsForProduct(
       continue;
     }
     if (isDraftSuppressedPosItemId(row.posItemId)) {
-      if (isFullUnitSaleCategory(category) && pourMl === bottleSizeMl) {
-        continue;
-      }
       unsuppressIds.push(row.id);
     }
   }
@@ -61,14 +63,10 @@ export async function ensureDraftMappingsForProduct(
     await db.posMenuMapping.createMany({ data: toCreate });
   }
   if (unsuppressIds.length > 0) {
-    await Promise.all(
-      unsuppressIds.map((id) =>
-        db.posMenuMapping.update({
-          where: { id },
-          data: { posItemId: null },
-        }),
-      ),
-    );
+    await db.posMenuMapping.updateMany({
+      where: { id: { in: unsuppressIds } },
+      data: { posItemId: null },
+    });
   }
 }
 
@@ -106,7 +104,7 @@ export async function syncDraftMappingsForTenant(tenantId: string) {
       batch.map(async (product) => {
         const bottleSizeMl = Number(product.bottleSizeMl);
         try {
-          if (isFullUnitSaleCategory(product.category)) {
+          if (isFullUnitSaleProduct(product.category, bottleSizeMl)) {
             await reconcileFullUnitSaleMappings(
               prisma,
               tenantId,
@@ -171,7 +169,7 @@ export async function updateFullBottleDraftPourSize(
     }
   }
 
-  if (isFullUnitSaleCategory(category)) {
+  if (isFullUnitSaleProduct(category, nextBottleSizeMl)) {
     await reconcileFullUnitSaleMappings(db, tenantId, productId, nextBottleSizeMl, category);
   } else {
     await ensureDraftMappingsForProduct(db, tenantId, productId, nextBottleSizeMl, category);
@@ -185,23 +183,33 @@ export async function reconcileFullUnitSaleMappings(
   bottleSizeMl: number,
   category: ProductCategory,
 ) {
-  if (!isFullUnitSaleCategory(category)) return;
+  if (!isFullUnitSaleProduct(category, bottleSizeMl)) return;
 
-  const mappings = await db.posMenuMapping.findMany({
-    where: { tenantId, productId },
+  await db.posMenuMapping.deleteMany({
+    where: {
+      tenantId,
+      productId,
+      NOT: { pourMl: pourMlDecimal(bottleSizeMl) },
+    },
   });
 
-  for (const mapping of mappings) {
-    if (Number(mapping.pourMl) !== bottleSizeMl) {
-      await db.posMenuMapping.delete({ where: { id: mapping.id } });
-    }
+  const fullBottle = await db.posMenuMapping.findFirst({
+    where: { tenantId, productId, pourMl: pourMlDecimal(bottleSizeMl) },
+  });
+
+  if (!fullBottle) {
+    await db.posMenuMapping.create({
+      data: draftMappingCreateData(tenantId, productId, bottleSizeMl),
+    });
+    return;
   }
 
-  for (const pourMl of [30, 60, 90, 120]) {
-    await recordDeletedMappingSlot(db, tenantId, productId, pourMl);
+  if (isDraftSuppressedPosItemId(fullBottle.posItemId)) {
+    await db.posMenuMapping.update({
+      where: { id: fullBottle.id },
+      data: { posItemId: null },
+    });
   }
-
-  await ensureDraftMappingsForProduct(db, tenantId, productId, bottleSizeMl, category);
 }
 
 /** @deprecated Use reconcileFullUnitSaleMappings */
@@ -218,4 +226,51 @@ export async function reconcileBeerProductMappings(
     bottleSizeMl,
     ProductCategory.BOTTLED_BEER,
   );
+}
+
+export async function syncMappingsAfterProductSave(input: {
+  tenantId: string;
+  productId: string;
+  bottleSizeMl: number;
+  category: ProductCategory;
+  previousBottleSizeMl?: number;
+}): Promise<void> {
+  try {
+    if (
+      input.previousBottleSizeMl != null &&
+      input.previousBottleSizeMl !== input.bottleSizeMl
+    ) {
+      await updateFullBottleDraftPourSize(
+        prisma,
+        input.tenantId,
+        input.productId,
+        input.previousBottleSizeMl,
+        input.bottleSizeMl,
+        input.category,
+      );
+      return;
+    }
+    if (isFullUnitSaleProduct(input.category, input.bottleSizeMl)) {
+      await reconcileFullUnitSaleMappings(
+        prisma,
+        input.tenantId,
+        input.productId,
+        input.bottleSizeMl,
+        input.category,
+      );
+    } else {
+      await ensureDraftMappingsForProduct(
+        prisma,
+        input.tenantId,
+        input.productId,
+        input.bottleSizeMl,
+        input.category,
+      );
+    }
+  } catch (error) {
+    console.error(
+      `[pos-mappings] sync after product ${input.productId} failed`,
+      error instanceof Error ? error.message : error,
+    );
+  }
 }

@@ -14,10 +14,10 @@ import {
 } from "@/lib/product-naming";
 import {
   defaultPourMlForCategory,
-  isFullUnitSaleCategory,
+  isFullUnitSaleProduct,
   isValidSizeForCategory,
 } from "@/lib/product-category";
-import { ensureDraftMappingsForProduct, reconcileFullUnitSaleMappings } from "@/lib/pos-draft-mappings";
+import { syncMappingsAfterProductSave } from "@/lib/pos-draft-mappings";
 import { filterTenantVendorIds } from "@/lib/tenant-vendors";
 
 const productSchema = z
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
           sku: finalSku,
           category: parsed.category,
           bottleSizeMl: parsed.bottleSizeMl,
-          defaultPourMl: isFullUnitSaleCategory(parsed.category)
+          defaultPourMl: isFullUnitSaleProduct(parsed.category, parsed.bottleSizeMl)
             ? parsed.bottleSizeMl
             : (parsed.defaultPourMl ??
               defaultPourMlForCategory(parsed.category, parsed.bottleSizeMl)),
@@ -159,25 +159,14 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (isFullUnitSaleCategory(parsed.category)) {
-        await reconcileFullUnitSaleMappings(
-          tx,
-          session.tenantId,
-          product.id,
-          parsed.bottleSizeMl,
-          parsed.category,
-        );
-      } else {
-        await ensureDraftMappingsForProduct(
-          tx,
-          session.tenantId,
-          product.id,
-          parsed.bottleSizeMl,
-          parsed.category,
-        );
-      }
-
       return product;
+    });
+
+    await syncMappingsAfterProductSave({
+      tenantId: session.tenantId,
+      productId: result.id,
+      bottleSizeMl: parsed.bottleSizeMl,
+      category: parsed.category,
     });
 
     recordApiMetric("POST /api/products", 201, Date.now() - startedAt);

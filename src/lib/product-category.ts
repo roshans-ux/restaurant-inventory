@@ -72,6 +72,16 @@ export function isFullUnitSaleCategory(category: ProductCategory): boolean {
   return category === ProductCategory.BOTTLED_BEER || category === ProductCategory.CIDER;
 }
 
+/** Bottle sizes that are never valid for spirits/wine/kegs — treat as whole-unit sales. */
+const FULL_UNIT_ONLY_SIZES_ML = new Set([330, 500, 650]);
+
+export function isFullUnitSaleProduct(
+  category: ProductCategory,
+  bottleSizeMl: number,
+): boolean {
+  return isFullUnitSaleCategory(category) || FULL_UNIT_ONLY_SIZES_ML.has(bottleSizeMl);
+}
+
 export function isHandoverCategory(category: ProductCategory): boolean {
   return (
     category === ProductCategory.SPIRIT ||
