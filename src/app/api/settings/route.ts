@@ -7,6 +7,7 @@ import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { DAY_KEYS, parseShiftSchedule } from "@/lib/shift-schedule";
 import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
+import { revalidateForecastCache } from "@/lib/forecast/cache";
 
 const timeSchema = z.union([
   z.string().regex(/^\d{2}:\d{2}$/),
@@ -28,6 +29,8 @@ const patchSchema = z.object({
     .optional(),
   adminWhatsappNumber: z.union([z.string(), z.null()]).optional(),
   paymentReminderDays: z.number().int().min(1).max(30).optional(),
+  forecastCoverageDays: z.number().int().min(1).max(60).optional(),
+  forecastSafetyDays: z.number().int().min(0).max(30).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -51,6 +54,8 @@ export async function GET(request: NextRequest) {
         posWebhookSecret: true,
         adminWhatsappNumber: true,
         paymentReminderDays: true,
+        forecastCoverageDays: true,
+        forecastSafetyDays: true,
       },
     });
     if (!tenant) {
@@ -140,14 +145,23 @@ export async function PATCH(request: NextRequest) {
         ...(payload.paymentReminderDays !== undefined
           ? { paymentReminderDays: payload.paymentReminderDays }
           : {}),
+        ...(payload.forecastCoverageDays !== undefined
+          ? { forecastCoverageDays: payload.forecastCoverageDays }
+          : {}),
+        ...(payload.forecastSafetyDays !== undefined
+          ? { forecastSafetyDays: payload.forecastSafetyDays }
+          : {}),
       },
       select: {
         slippageTolerancePercent: true,
         shiftSchedule: true,
         adminWhatsappNumber: true,
         paymentReminderDays: true,
+        forecastCoverageDays: true,
+        forecastSafetyDays: true,
       },
     });
+    revalidateForecastCache(session.tenantId);
     return apiOk({
       ...updated,
       shiftSchedule: parseShiftSchedule(updated.shiftSchedule),

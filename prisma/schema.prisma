@@ -77,6 +77,10 @@ model Tenant {
   adminWhatsappNumber        String?
   orderBatchWindowStart      DateTime?
   paymentReminderDays        Int       @default(3)
+  forecastCoverageDays       Int       @default(7)
+  forecastSafetyDays         Int       @default(1)
+  salesImportColumnMapping   Json?
+  salesImportIgnoredNames    Json?
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
   users            User[]
@@ -87,6 +91,7 @@ model Tenant {
   vendors          Vendor[]
   bottleRotations  BottleRotation[]
   stockOrders      StockOrder[]
+  salesImportBatches SalesImportBatch[]
 }
 
 model User {
@@ -126,6 +131,7 @@ model Vendor {
   whatsappNumber   String
   email            String?
   creditPeriodDays Int?
+  leadTimeDays     Int           @default(2)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -209,6 +215,23 @@ model CocktailMapping {
   @@index([tenantId])
 }
 
+model SalesImportBatch {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  fileName             String
+  contentHash          String?
+  rowsImported         Int
+  rowsSkippedDuplicate Int       @default(0)
+  dateRangeStart       DateTime?
+  dateRangeEnd         DateTime?
+  createdAt            DateTime  @default(now())
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sales                PosSale[]
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, contentHash])
+}
+
 model PosSale {
   id             String        @id @default(uuid())
   tenantId       String
@@ -217,12 +240,18 @@ model PosSale {
   soldAt         DateTime
   receivedAt     DateTime      @default(now())
   createdAt      DateTime      @default(now())
+  source         String        @default("POS")
+  importBatchId  String?
+  billNumber     String?
   tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  importBatch    SalesImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
   lines          PosSaleLine[]
 
   @@unique([tenantId, externalSaleId])
   @@unique([tenantId, requestHash])
   @@index([tenantId])
+  @@index([importBatchId])
+  @@index([tenantId, source])
 }
 
 model PosSaleLine {

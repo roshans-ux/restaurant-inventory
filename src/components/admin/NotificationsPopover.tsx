@@ -21,6 +21,7 @@ type AlertItem = {
   message: string;
   createdAt: string;
   readAt: string | null;
+  referenceKey?: string | null;
   product: { name: string; bottleSizeMl: number | string };
 };
 
@@ -38,7 +39,8 @@ type NotificationsPopoverProps = {
 
 const PANEL_WIDTH = 380;
 
-function typeLabel(type: AlertType, message: string): string {
+function typeLabel(type: AlertType, message: string, referenceKey?: string | null): string {
+  if (referenceKey?.startsWith("restock-summary:")) return "Restock";
   if (type === AlertType.PAYMENT_REMINDER) return "Payment reminder";
   if (type !== AlertType.SLIPPAGE) return "Low stock";
   const kind = parseSlippageAlertKind(message);
@@ -58,6 +60,7 @@ function NotificationRow({
   onMarkRead: (id: string) => void;
   onMarkUnread: (id: string) => void;
 }) {
+  const isRestockSummary = Boolean(alert.referenceKey?.startsWith("restock-summary:"));
   const isSlippage = alert.type === AlertType.SLIPPAGE;
   const unread = alert.readAt == null;
   const kind = parseSlippageAlertKind(alert.message);
@@ -69,11 +72,13 @@ function NotificationRow({
         : "var(--accent)";
   const sizedName = formatProductNameWithSize(alert.product.name, Number(alert.product.bottleSizeMl));
   const body = formatSlippageAlertBody(alert.message);
-  const displayMessage = body.includes(sizedName)
-    ? body
-    : body.includes(alert.product.name)
-      ? body.replace(alert.product.name, sizedName)
-      : body;
+  const displayMessage = isRestockSummary
+    ? alert.message
+    : body.includes(sizedName)
+      ? body
+      : body.includes(alert.product.name)
+        ? body.replace(alert.product.name, sizedName)
+        : body;
 
   return (
     <div
@@ -107,10 +112,10 @@ function NotificationRow({
             className="text-sm font-semibold"
             style={{ color: "var(--text-primary)" }}
           >
-            {sizedName}
+            {isRestockSummary ? "Stock orders" : sizedName}
           </span>
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {typeLabel(alert.type, alert.message)}
+            {typeLabel(alert.type, alert.message, alert.referenceKey)}
           </span>
         </div>
         <p
@@ -119,6 +124,15 @@ function NotificationRow({
         >
           {displayMessage}
         </p>
+        {isRestockSummary ? (
+          <a
+            href="/admin/stock-orders"
+            className="mt-1.5 inline-block text-xs font-medium"
+            style={{ color: "var(--accent)" }}
+          >
+            Open Stock Orders →
+          </a>
+        ) : null}
         <p className="mt-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
           {formatAppDateTime(alert.createdAt)}
         </p>

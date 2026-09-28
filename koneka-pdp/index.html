@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neelara — The Grey Support Oil | KONEKA</title>
+    <meta
+      name="description"
+      content="Neelara Grey Support Oil — coastal wisdom from India's beauty landscapes. Natural pigmentation support for greying hair."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Outfit:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="#" class="logo">KONEKA</a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="#story">Our Story</a>
+        <a href="#ritual">Ritual</a>
+        <a href="#reviews">Reviews</a>
+      </nav>
+      <button type="button" class="cart-btn" aria-label="Cart (0 items)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M6 6h15l-1.5 9h-12L6 6zM6 6L5 3H2"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <circle cx="9" cy="20" r="1" fill="currentColor" />
+          <circle cx="18" cy="20" r="1" fill="currentColor" />
+        </svg>
+      </button>
+    </header>
+
+    <main>
+      <!-- Product hero -->
+      <section class="pdp-hero" aria-labelledby="product-title">
+        <div class="pdp-gallery">
+          <div class="gallery-collage gallery-collage--coastal">
+            <div class="collage-bg" aria-hidden="true">
+              <div class="collage-illustration collage-illustration--palm"></div>
+              <div class="collage-illustration collage-illustration--boat"></div>
+              <div class="collage-illustration collage-illustration--shore"></div>
+            </div>
+            <div class="botanical-cards" aria-hidden="true">
+              <div class="botanical-card botanical-card--1"></div>
+              <div class="botanical-card botanical-card--2"></div>
+              <div class="botanical-card botanical-card--3"></div>
+            </div>
+            <figure class="product-bottle">
+              <div class="bottle-placeholder bottle-placeholder--neelara" role="img" aria-label="Neelara Grey Support Oil bottle"></div>
+            </figure>
+          </div>
+          <div class="gallery-thumbs" role="tablist" aria-label="Product images">
+            <button type="button" class="thumb thumb--active" role="tab" aria-selected="true" aria-label="Main product view"></button>
+            <button type="button" class="thumb thumb--texture" role="tab" aria-selected="false" aria-label="Oil texture"></button>
+            <button type="button" class="thumb thumb--ingredients" role="tab" aria-selected="false" aria-label="Ingredients"></button>
+          </div>
+        </div>
+
+        <div class="pdp-info">
+          <p class="eyebrow">Coastlines Collection</p>
+          <h1 id="product-title">Neelara</h1>
+          <p class="product-subtitle">The Grey Support Oil</p>
+          <p class="product-tagline">For natural pigmentation &amp; silver-tone balance</p>
+
+          <div class="price-row">
+            <span class="price">₹1,290</span>
+            <span class="size">50 ml</span>
+          </div>
+
+          <p class="product-lead">
+            A slow-infused coastal blend drawn from indigo-rich botanicals and
+            time-honoured Kerala kitchen wisdom — crafted to nourish greying strands
+            without masking your natural silver.
+          </p>
+
+          <form class="purchase-form" action="#" method="post">
+            <div class="qty-row">
+              <label for="quantity">Quantity</label>
+              <div class="qty-control">
+                <button type="button" class="qty-btn" data-action="decrease" aria-label="Decrease quantity">−</button>
+                <input type="number" id="quantity" name="quantity" value="1" min="1" max="10" />
+                <button type="button" class="qty-btn" data-action="increase" aria-label="Increase quantity">+</button>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Add to cart</button>
+            <button type="button" class="btn btn-secondary">Buy now</button>
+          </form>
+
+          <ul class="trust-badges">
+            <li>Cold-pressed &amp; slow-infused</li>
+            <li>No parabens or mineral oil</li>
+            <li>Ships across India</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Brand story -->
+      <section class="story" id="story">
+        <div class="story-decor story-decor--mirror" aria-hidden="true"></div>
+        <div class="story-decor story-decor--monument" aria-hidden="true"></div>
+        <blockquote class="story-quote">
+          <p>
+            We&rsquo;ve spent years travelling through India&rsquo;s beauty landscapes.
+            Not searching for new ingredients — searching for old wisdom. The kind that
+            survives in mountains, coastlines, forests, and kitchens long after trends
+            disappear.
+          </p>
+        </blockquote>
+      </section>
+
+      <!-- Benefits -->
+      <section class="benefits" aria-labelledby="benefits-heading">
+        <h2 id="benefits-heading" class="section-title">What Neelara does</h2>
+        <div class="benefits-grid">
+          <article class="benefit-card">
+            <span class="benefit-icon" aria-hidden="true">01</span>
+            <h3>Supports natural pigment</h3>
+            <p>Indigo leaf and amla work with your hair&rsquo;s own melanin rhythm — not against it.</p>
+          </article>
+          <article class="benefit-card">
+            <span class="benefit-icon" aria-hidden="true">02</span>
+            <h3>Coastal nourishment</h3>
+            <p>Coconut and hibiscus oils seal moisture along the strand without a heavy residue.</p>
+          </article>
+          <article class="benefit-card">
+            <span class="benefit-icon" aria-hidden="true">03</span>
+            <h3>Scalp-first ritual</h3>
+            <p>Warm-oil massage stimulates circulation — the foundation of every KONEKA formula.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Ingredients collage -->
+      <section class="ingredients" aria-labelledby="ingredients-heading">
+        <div class="ingredients-visual">
+          <div class="ingredients-collage">
+            <div class="ingredient-float ingredient-float--1" role="img" aria-label="Indigo botanical sketch placeholder"></div>
+            <div class="ingredient-float ingredient-float--2" role="img" aria-label="Hibiscus botanical sketch placeholder"></div>
+            <div class="ingredient-float ingredient-float--3" role="img" aria-label="Amla botanical sketch placeholder"></div>
+          </div>
+        </div>
+        <div class="ingredients-copy">
+          <h2 id="ingredients-heading" class="section-title">Key botanicals</h2>
+          <dl class="ingredient-list">
+            <div>
+              <dt>Indigo leaf (<em>Indigofera tinctoria</em>)</dt>
+              <dd>Traditionally used along the Malabar coast for natural colour support.</dd>
+            </div>
+            <div>
+              <dt>Hibiscus flower</dt>
+              <dd>Rich in mucilage — softens and adds luminous body to ageing hair.</dd>
+            </div>
+            <div>
+              <dt>Amla &amp; coconut</dt>
+              <dd>The coastal pairing: strength from within, slip on the surface.</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- Ritual / how to use -->
+      <section class="ritual" id="ritual" aria-labelledby="ritual-heading">
+        <h2 id="ritual-heading" class="section-title section-title--center">The Neelara ritual</h2>
+        <ol class="ritual-steps">
+          <li>
+            <span class="step-num">1</span>
+            <div>
+              <h3>Warm</h3>
+              <p>Place 3–4 dropperfuls in a small bowl. Warm between palms — never microwave.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <div>
+              <h3>Massage</h3>
+              <p>Work into scalp with fingertips in slow circles. Let gravity carry oil to mid-lengths.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <div>
+              <h3>Rest</h3>
+              <p>Leave 45–60 minutes under a warm towel. Rinse with a gentle, sulphate-free cleanser.</p>
+            </div>
+          </li>
+        </ol>
+        <p class="ritual-note">Use twice weekly for visible support over 8–12 weeks.</p>
+      </section>
+
+      <!-- Reviews -->
+      <section class="reviews" id="reviews" aria-labelledby="reviews-heading">
+        <div class="reviews-header">
+          <h2 id="reviews-heading" class="section-title">Beyond every ritual is a review</h2>
+          <p class="reviews-sub">Real stories from those who made Neelara part of their Sunday.</p>
+          <div class="reviews-decor" aria-hidden="true"></div>
+        </div>
+        <div class="reviews-grid">
+          <article class="review-card">
+            <div class="stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <blockquote>
+              <p>&ldquo;My greys look intentional now — softer, not brassy. The oil smells like the coast.&rdquo;</p>
+            </blockquote>
+            <footer>— Ananya M., Kochi</footer>
+          </article>
+          <article class="review-card">
+            <div class="stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <blockquote>
+              <p>&ldquo;I stopped fighting my silver. Neelara made it feel like a choice, not a compromise.&rdquo;</p>
+            </blockquote>
+            <footer>— Priya S., Bengaluru</footer>
+          </article>
+          <article class="review-card">
+            <div class="stars" aria-label="4 out of 5 stars">★★★★☆</div>
+            <blockquote>
+              <p>&ldquo;Light enough for fine hair. Visible difference after six weeks of Sunday rituals.&rdquo;</p>
+            </blockquote>
+            <footer>— Meera K., Mumbai</footer>
+          </article>
+        </div>
+      </section>
+
+      <!-- Related products -->
+      <section class="related" aria-labelledby="related-heading">
+        <h2 id="related-heading" class="section-title section-title--center">Explore the collection</h2>
+        <div class="related-grid">
+          <a href="#" class="related-card related-card--lakai">
+            <div class="related-bottle" role="img" aria-label="Lakai bottle placeholder"></div>
+            <h3>Lakai</h3>
+            <p>The Flake Control Oil</p>
+            <span class="shop-link">Shop now</span>
+          </a>
+          <a href="#" class="related-card related-card--aonika">
+            <div class="related-bottle" role="img" aria-label="Aonika bottle placeholder"></div>
+            <h3>Aonika</h3>
+            <p>The Hair Growth Oil</p>
+            <span class="shop-link">Shop now</span>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span class="logo">KONEKA</span>
+        <p class="footer-tagline">Old wisdom. New rituals.</p>
+        <nav class="footer-nav" aria-label="Footer">
+          <a href="#">Shipping</a>
+          <a href="#">Returns</a>
+          <a href="#">Contact</a>
+          <a href="#">Instagram</a>
+        </nav>
+        <p class="footer-copy">&copy; 2026 KONEKA. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

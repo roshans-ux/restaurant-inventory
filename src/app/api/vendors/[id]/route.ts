@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
+import { revalidateForecastCache } from "@/lib/forecast/cache";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -13,6 +14,7 @@ const patchSchema = z.object({
   whatsappNumber: z.string().min(5).optional(),
   creditPeriodDays: z.number().int().min(0).nullable().optional(),
   email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
+  leadTimeDays: z.number().int().min(0).max(60).optional(),
 });
 
 export async function PATCH(request: NextRequest, { params }: Params) {
@@ -50,9 +52,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         ...(payload.email !== undefined
           ? { email: payload.email?.trim() ? payload.email.trim() : null }
           : {}),
+        ...(payload.leadTimeDays !== undefined ? { leadTimeDays: payload.leadTimeDays } : {}),
       },
     });
     revalidateTag("vendors", { expire: 0 });
+    revalidateForecastCache(session.tenantId);
     return apiOk({ vendor });
   } catch (error) {
     return apiError("VENDOR_UPDATE_FAILED", "Failed to update vendor", 400, {
@@ -76,6 +80,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     await prisma.vendor.delete({ where: { id } });
     revalidateTag("vendors", { expire: 0 });
+    revalidateForecastCache(session.tenantId);
     return apiOk({ deleted: true, id });
   } catch (error) {
     return apiError("VENDOR_DELETE_FAILED", "Failed to delete vendor", 400, {

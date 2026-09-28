@@ -14,6 +14,8 @@ import {
 import { formatBottleStock, formatQuartersAndMl } from "@/lib/format-bottles";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
 import { ProductCategory } from "@prisma/client";
+import { ForecastStockMeta, needsRestocking, type ForecastDisplay } from "@/components/admin/ForecastStockMeta";
+import { istIsoDate } from "@/lib/forecast/dates";
 
 const POUR_ML = 30;
 const ENABLE_POUR_VARIANCE_ADJUSTMENTS = false;
@@ -35,6 +37,7 @@ type StockLevel = {
   currentMl: number;
   bottleSizeMl: number;
   thresholdBottles: number | null;
+  forecast?: ForecastDisplay | null;
 };
 
 type AdjustType = "BOTTLE_BROKEN" | "SEND_BACK_TO_SELLER" | "UNDERPOUR" | "OVERPOUR";
@@ -143,6 +146,7 @@ function Stepper({
 }
 
 export default function StockPage() {
+  const todayIso = istIsoDate();
   const [products, setProducts] = useState<Product[]>([]);
   const [levels, setLevels] = useState<StockLevel[]>([]);
   const [mode, setMode] = useState<"receive" | "adjust">("receive");
@@ -817,7 +821,7 @@ export default function StockPage() {
                         <span className="flex justify-end">{levelsHeaderButton("stock", "Stock", "right")}</span>
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
-                        <span className="flex justify-end">{levelsHeaderButton("threshold", "Threshold", "right")}</span>
+                        <span className="flex justify-end">{levelsHeaderButton("threshold", "Keep at least", "right")}</span>
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
                         <span className="flex justify-end">{levelsHeaderButton("ml", "ml", "right")}</span>
@@ -826,8 +830,13 @@ export default function StockPage() {
                   </thead>
                   <tbody>
                     {visibleLevels.map((l, i) => {
-                      const low =
-                        l.thresholdBottles !== null && l.currentBottles < l.thresholdBottles;
+                      const low = needsRestocking({
+                        currentMl: l.currentMl,
+                        bottleSizeMl: l.bottleSizeMl,
+                        thresholdBottles: l.thresholdBottles,
+                        forecast: l.forecast,
+                        todayIso,
+                      });
                       const fullInStock = Math.floor(l.currentMl / l.bottleSizeMl);
                       return (
                       <tr
@@ -840,6 +849,13 @@ export default function StockPage() {
                       >
                         <td className="px-4 py-3 font-medium">
                           {l.name} ({formatBottleSizeLabel(l.bottleSizeMl)})
+                          <ForecastStockMeta
+                            forecast={l.forecast}
+                            todayIso={todayIso}
+                            currentMl={l.currentMl}
+                            bottleSizeMl={l.bottleSizeMl}
+                            thresholdBottles={l.thresholdBottles}
+                          />
                         </td>
                         <td
                           className="px-4 py-3 text-right text-xs"
@@ -852,7 +868,7 @@ export default function StockPage() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--text-muted)" }}>
                           {l.thresholdBottles !== null
-                            ? `${l.thresholdBottles} minimum required`
+                            ? `Always keep at least ${l.thresholdBottles}`
                             : "—"}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums" style={{ color: "var(--text-muted)" }}>

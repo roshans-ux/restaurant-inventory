@@ -5,6 +5,10 @@
     {
       "path": "/api/cron/order-batch",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/restock-check",
+      "schedule": "30 3 * * *"
     }
   ]
 }

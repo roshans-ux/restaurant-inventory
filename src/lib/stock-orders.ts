@@ -1,12 +1,19 @@
 import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentStockMl, isBelowThreshold } from "@/lib/inventory";
+import { getCurrentStockMl } from "@/lib/inventory";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
 import {
   ensureOrderBatchWindow,
   flushDueOrderBatches,
   isOwnerWhatsAppPath,
 } from "@/lib/order-batch";
+import { getCachedForecastsForTenant } from "@/lib/forecast/cache";
+import { istIsoDate } from "@/lib/forecast/dates";
+import {
+  isBelowKeepAtLeast,
+  isForecastReorderDue,
+  suggestedOrderBottles,
+} from "@/lib/forecast/restock";
 
 export type PendingStockOrderContext = {
   currentMl: number;
@@ -14,13 +21,16 @@ export type PendingStockOrderContext = {
   bottleSizeMl: number;
   reorderQuantity: number;
   vendorId: string | null;
+  enoughData?: boolean;
+  orderBy?: string | null;
+  forecastSuggestedBottles?: number;
 };
 
 export async function maybeCreatePendingStockOrder(
   productId: string,
   tenantId: string,
   known?: PendingStockOrderContext,
-): Promise<void> {
+): Promise<{ created: boolean; productName?: string }> {
   await flushDueOrderBatches(tenantId);
 
   let currentMl = known?.currentMl;
@@ -39,8 +49,8 @@ export async function maybeCreatePendingStockOrder(
       where: { productId },
       include: { product: { include: { vendors: { select: { id: true } } } } },
     });
-    if (!config) return;
-    if (config.product.tenantId !== tenantId) return;
+    if (!config) return { created: false };
+    if (config.product.tenantId !== tenantId) return { created: false };
 
     bottleSizeMl = Number(config.product.bottleSizeMl);
     thresholdBottles = Number(config.thresholdBottles);
@@ -49,7 +59,57 @@ export async function maybeCreatePendingStockOrder(
     currentMl = await getCurrentStockMl(productId);
   }
 
-  if (!isBelowThreshold(currentMl, thresholdBottles, bottleSizeMl)) return;
+  if (
+    currentMl === undefined ||
+    thresholdBottles === undefined ||
+    bottleSizeMl === undefined ||
+    reorderQuantity === undefined
+  ) {
+    return { created: false };
+  }
+
+  let quantityBottles = reorderQuantity;
+  let createdReason = "Order created automatically (below always-keep-at-least)";
+
+  const forecast =
+    known && known.forecastSuggestedBottles !== undefined
+      ? {
+          enoughData: Boolean(known.enoughData),
+          orderBy: known.orderBy ?? null,
+          suggestedBottles: known.forecastSuggestedBottles,
+          vendorId: known.vendorId,
+        }
+      : (await getCachedForecastsForTenant(tenantId))[productId];
+  const floorTriggered = isBelowKeepAtLeast(currentMl, thresholdBottles, bottleSizeMl);
+  const forecastDue = isForecastReorderDue(
+    forecast?.orderBy ?? null,
+    istIsoDate(),
+    Boolean(forecast?.enoughData),
+  );
+
+  if (!floorTriggered && !forecastDue) return { created: false };
+
+  if (forecast?.enoughData) {
+    vendorId = forecast.vendorId ?? vendorId;
+    createdReason = forecastDue
+      ? "Order created automatically (forecast reorder-by date)"
+      : "Order created automatically (below always-keep-at-least)";
+  }
+
+  quantityBottles = suggestedOrderBottles({
+    currentMl,
+    bottleSizeMl,
+    thresholdBottles,
+    enoughData: Boolean(forecast?.enoughData),
+    forecastSuggestedBottles: forecast?.suggestedBottles ?? 0,
+    floorTriggered,
+  });
+
+  if (!forecast?.enoughData && !floorTriggered) return { created: false };
+  if (quantityBottles <= 0) {
+    if (!floorTriggered) return { created: false };
+    quantityBottles = Math.max(1, reorderQuantity);
+  }
 
   const existingPending = await prisma.stockOrder.findFirst({
     where: {
@@ -60,18 +120,19 @@ export async function maybeCreatePendingStockOrder(
           StockOrderStatus.PENDING,
           StockOrderStatus.MODIFIED,
           StockOrderStatus.AWAITING_APPROVAL,
+          StockOrderStatus.PLACED,
         ],
       },
     },
   });
-  if (existingPending) return;
+  if (existingPending) return { created: false };
 
   const order = await prisma.stockOrder.create({
     data: {
       tenantId,
       productId,
       vendorId,
-      quantityBottles: reorderQuantity,
+      quantityBottles,
       status: StockOrderStatus.PENDING,
     },
     include: {
@@ -84,10 +145,11 @@ export async function maybeCreatePendingStockOrder(
   await appendStockOrderLog(
     prisma,
     order.id,
-    "Order created automatically (stock below threshold)",
+    createdReason,
   );
 
   if (isOwnerWhatsAppPath(order.tenant.adminWhatsappNumber)) {
     await ensureOrderBatchWindow(tenantId);
   }
+  return { created: true, productName: order.product.name };
 }

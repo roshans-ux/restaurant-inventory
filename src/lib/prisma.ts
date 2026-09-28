@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 /** Bump when schema/delegates change so dev hot-reload does not keep a stale client. */
-const PRISMA_CLIENT_GENERATION = "2026-09-20-order-batch-whatsapp-v1";
+const PRISMA_CLIENT_GENERATION = "2026-09-27-sales-import-content-hash";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -41,7 +41,8 @@ function isValidCachedClient(client: PrismaClient | undefined): client is Prisma
     typeof client.cocktailMapping?.findFirst === "function" &&
     typeof client.vendor?.findMany === "function" &&
     typeof client.stockOrder?.findMany === "function" &&
-    typeof client.bottleRotation?.findMany === "function"
+    typeof client.bottleRotation?.findMany === "function" &&
+    typeof client.salesImportBatch?.findMany === "function"
   );
 }
 

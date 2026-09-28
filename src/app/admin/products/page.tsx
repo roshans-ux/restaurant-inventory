@@ -362,7 +362,7 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Bottles</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Manage bottle metadata only (SKU, size, thresholds). Use Stock Entry for quantity changes.
+            Manage bottle metadata only (SKU, size, always-keep-at-least). Use Stock Entry for quantity changes.
           </p>
         </div>
         <button
@@ -569,7 +569,7 @@ export default function ProductsPage() {
 
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                Alert Threshold (bottles)
+                Always keep at least (bottles)
               </span>
               <input
                 name="thresholdBottles"
@@ -747,7 +747,7 @@ export default function ProductsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                {["Name", "Category", "SKU", "Bottle Size", "Threshold", "Actions"].map((h) => (
+                {["Name", "Category", "SKU", "Bottle Size", "Keep at least", "Actions"].map((h) => (
                   <th
                     key={h}
                     className={`px-4 py-3 text-xs font-medium uppercase tracking-widest ${h === "Actions" ? "text-right" : "text-left"}`}

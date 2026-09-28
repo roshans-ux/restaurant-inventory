@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Send, XCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw, Send, XCircle } from "lucide-react";
 import SortHeaderIcon from "@/components/admin/SortHeaderIcon";
 import VendorMultiSelect from "@/components/admin/VendorMultiSelect";
 import { getApiErrorMessage, readJsonResponse } from "@/lib/http";
@@ -48,6 +48,7 @@ export default function StockOrdersPage() {
   const [placeAssignments, setPlaceAssignments] = useState<Record<string, string[]>>({});
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState("");
+  const [checking, setChecking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -395,6 +396,35 @@ export default function StockOrdersPage() {
     }
   }
 
+  async function checkNow() {
+    setChecking(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await fetch("/api/stock-orders/restock-check", { method: "POST" });
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        data?: { created?: number; notified?: number };
+        error?: { message?: string };
+      }>(res);
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Restock check failed"));
+      const created = data.data?.created ?? 0;
+      const notified = data.data?.notified ?? 0;
+      if (created === 0) {
+        setNotice("No new restock orders.");
+      } else {
+        setNotice(
+          `Created ${created} order${created === 1 ? "" : "s"}${notified ? " and sent a notification." : "."}`,
+        );
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restock check failed");
+    } finally {
+      setChecking(false);
+    }
+  }
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "all", label: "All" },
     { key: "pending", label: "Pending" },
@@ -408,11 +438,26 @@ export default function StockOrdersPage() {
         <div>
           <h1 className="text-2xl font-semibold">Stock Orders</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Pending orders are created automatically when stock falls below threshold.
+            Pending orders are created automatically when it is time to reorder.
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void checkNow()}
+              disabled={checking || acting}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
+              style={{
+                background: "var(--surface-elevated)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            >
+              <RefreshCw size={13} />
+              {checking ? "Checking…" : "Check now"}
+            </button>
         {!readOnly && (
-          <div className="flex flex-wrap gap-2">
+          <>
             <button
               type="button"
               onClick={openPlaceModal}
@@ -433,8 +478,9 @@ export default function StockOrdersPage() {
               <XCircle size={13} />
               Cancel
             </button>
-          </div>
+          </>
         )}
+        </div>
       </div>
 
       {awaitingOwner && (

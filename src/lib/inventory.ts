@@ -1,9 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { AlertType, StockMovementType } from "@prisma/client";
-import { formatBottleStock } from "@/lib/format-bottles";
 import { prisma } from "@/lib/prisma";
-import { maybeCreatePendingStockOrder } from "@/lib/stock-orders";
-import { formatProductNameWithSize } from "@/lib/product-naming";
+import { checkRestockForTenant } from "@/lib/restock-check";
 
 export const DEFAULT_BOTTLE_SIZE_ML = 750;
 export const STANDARD_POUR_ML = 30;
@@ -52,60 +50,20 @@ async function resolveOpenLowStockAlerts(productId: string): Promise<void> {
   });
 }
 
-/** Reconcile open alerts with current stock and threshold; create alert only when strictly below threshold. */
+/** Tenant-wide restock orders + summary bell. Per-SKU low-stock bells are no longer created here. */
 export async function syncLowStockAlerts(productId: string): Promise<void> {
-  const [config, currentMl] = await Promise.all([
-    prisma.reorderConfig.findUnique({
-      where: { productId },
-      include: { product: { include: { vendors: { select: { id: true } } } } },
-    }),
-    getCurrentStockMl(productId),
-  ]);
-
-  if (!config) {
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { tenantId: true, reorderConfig: { select: { id: true } } },
+  });
+  if (!product) {
     await resolveOpenLowStockAlerts(productId);
     return;
   }
-
-  const bottleSizeMl = Number(config.product.bottleSizeMl);
-  const thresholdBottles = Number(config.thresholdBottles);
-
-  if (!isBelowThreshold(currentMl, thresholdBottles, bottleSizeMl)) {
+  if (!product.reorderConfig) {
     await resolveOpenLowStockAlerts(productId);
-    return;
   }
-
-  if (!config.notifyAdmin) return;
-
-  const cooldownMinutes = Number(process.env.ALERT_COOLDOWN_MINUTES ?? 120);
-  const cooldownSince = new Date(Date.now() - cooldownMinutes * 60 * 1000);
-  const [recentAlert, openAlert] = await Promise.all([
-    prisma.alert.findFirst({
-      where: { productId, type: AlertType.LOW_STOCK, createdAt: { gte: cooldownSince } },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.alert.findFirst({
-      where: { productId, type: AlertType.LOW_STOCK, resolvedAt: null },
-    }),
-  ]);
-  if (recentAlert || openAlert) return;
-
-  const stockLabel = formatBottleStock(currentMl, bottleSizeMl);
-  await prisma.alert.create({
-    data: {
-      productId,
-      type: AlertType.LOW_STOCK,
-      message: `${formatProductNameWithSize(config.product.name, bottleSizeMl)} is below threshold at ${stockLabel}`,
-    },
-  });
-
-  await maybeCreatePendingStockOrder(productId, config.product.tenantId, {
-    currentMl,
-    thresholdBottles,
-    bottleSizeMl,
-    reorderQuantity: config.reorderQuantity,
-    vendorId: config.product.vendorId ?? config.product.vendors[0]?.id ?? null,
-  });
+  await checkRestockForTenant(product.tenantId);
 }
 
 /** @deprecated Use syncLowStockAlerts */

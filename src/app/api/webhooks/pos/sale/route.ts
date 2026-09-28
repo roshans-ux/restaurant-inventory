@@ -4,7 +4,8 @@ import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { QuantityUnit } from "@prisma/client";
 import { afterResponse } from "@/lib/after-response";
-import { evaluateLowStock, isWithinReplayWindow, verifyWebhookSignature } from "@/lib/inventory";
+import { isWithinReplayWindow, verifyWebhookSignature } from "@/lib/inventory";
+import { checkRestockForTenant } from "@/lib/restock-check";
 import { apiError, apiOk } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
 import {
@@ -181,25 +182,14 @@ export async function POST(request: NextRequest) {
       return posSale;
     });
 
-    const lines = await prisma.posSaleLine.findMany({
-      where: { posSaleId: result.id },
-      select: { productId: true },
-      distinct: ["productId"],
-    });
-
     revalidateTag("inventory-levels", { expire: 0 });
-    const productIds = lines.map((line) => line.productId);
     afterResponse(async () => {
-      await Promise.all(
-        productIds.map(async (productId) => {
-          try {
-            await evaluateLowStock(productId);
-          } catch (alertError) {
-            console.error("Low-stock alert sync failed after sale:", alertError);
-          }
-        }),
-      );
-    }, "pos-sale low-stock");
+      try {
+        await checkRestockForTenant(tenant.id);
+      } catch (alertError) {
+        console.error("Restock check failed after sale:", alertError);
+      }
+    }, "pos-sale restock-check");
     const response = apiOk({ saleId: result.id, accepted: true });
     recordApiMetric("POST /api/webhooks/pos/sale", 200, Date.now() - startedAt);
     return response;

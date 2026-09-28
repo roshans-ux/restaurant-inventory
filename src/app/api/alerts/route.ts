@@ -4,6 +4,9 @@ import { apiError } from "@/lib/http";
 import { recordApiMetric } from "@/lib/observability";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { syncPaymentReminders } from "@/lib/payment-reminders";
+import {
+  RESTOCK_SKU_ALERT_PREFIX,
+} from "@/lib/restock-check";
 
 export async function GET(request: NextRequest) {
   const startedAt = Date.now();
@@ -15,6 +18,7 @@ export async function GET(request: NextRequest) {
       where: {
         resolvedAt: null,
         product: { tenantId: session.tenantId },
+        NOT: { referenceKey: { startsWith: RESTOCK_SKU_ALERT_PREFIX } },
       },
       include: { product: true },
       orderBy: { createdAt: "desc" },

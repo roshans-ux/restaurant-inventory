@@ -404,7 +404,7 @@ export default function AddBottleModal({
 
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-              Alert Threshold (bottles)
+              Always keep at least (bottles)
             </span>
             <input
               type="number"

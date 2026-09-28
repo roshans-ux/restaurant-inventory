@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
+import { revalidateForecastCache } from "@/lib/forecast/cache";
 
 const getCachedVendorsLean = unstable_cache(
   async (tenantId: string) =>
@@ -56,6 +57,7 @@ const createSchema = z.object({
   whatsappNumber: z.string().min(5),
   creditPeriodDays: z.number().int().min(0).nullable().optional(),
   email: z.union([z.string().email(), z.literal(""), z.null()]).optional(),
+  leadTimeDays: z.number().int().min(0).max(60).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -77,9 +79,11 @@ export async function POST(request: NextRequest) {
         whatsappNumber,
         creditPeriodDays: payload.creditPeriodDays ?? null,
         email: payload.email?.trim() ? payload.email.trim() : null,
+        leadTimeDays: payload.leadTimeDays ?? 2,
       },
     });
     revalidateTag("vendors", { expire: 0 });
+    revalidateForecastCache(session.tenantId);
     return apiOk({ vendor }, 201);
   } catch (error) {
     return apiError("VENDOR_CREATE_FAILED", "Failed to create vendor", 400, {

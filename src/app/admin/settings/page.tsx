@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { Copy, Check, Plus, Trash2, Pencil } from "lucide-react";
 import {
   DAY_KEYS,
@@ -22,6 +23,8 @@ type TenantInfo = {
   slippageTolerancePercent: number;
   shiftSchedule: Record<DayKey, DayShift | null>;
   paymentReminderDays: number;
+  forecastCoverageDays: number;
+  forecastSafetyDays: number;
 };
 
 type Vendor = {
@@ -30,6 +33,7 @@ type Vendor = {
   whatsappNumber: string;
   email?: string | null;
   creditPeriodDays?: number | null;
+  leadTimeDays?: number;
   products?: { id: string; name: string; sku: string | null }[];
 };
 
@@ -97,6 +101,10 @@ export default function SettingsPage() {
   const [editVendorCreditDays, setEditVendorCreditDays] = useState("");
   const [savingVendor, setSavingVendor] = useState(false);
   const [paymentReminderDays, setPaymentReminderDays] = useState("3");
+  const [forecastCoverageDays, setForecastCoverageDays] = useState("7");
+  const [forecastSafetyDays, setForecastSafetyDays] = useState("1");
+  const [vendorLeadDays, setVendorLeadDays] = useState("2");
+  const [editVendorLeadDays, setEditVendorLeadDays] = useState("2");
 
   async function loadAll() {
     const [meRes, vendorsRes] = await Promise.all([
@@ -122,11 +130,15 @@ export default function SettingsPage() {
         slippageTolerancePercent: t.slippageTolerancePercent ?? 10,
         shiftSchedule: t.shiftSchedule ?? {},
         paymentReminderDays: t.paymentReminderDays ?? 3,
+        forecastCoverageDays: t.forecastCoverageDays ?? 7,
+        forecastSafetyDays: t.forecastSafetyDays ?? 1,
       });
       setAdminWhatsapp(t.adminWhatsappNumber ?? "");
       setWhatsappConnected(Boolean(t.whatsappConnected));
       setSlippage(String(t.slippageTolerancePercent ?? 10));
       setPaymentReminderDays(String(t.paymentReminderDays ?? 3));
+      setForecastCoverageDays(String(t.forecastCoverageDays ?? 7));
+      setForecastSafetyDays(String(t.forecastSafetyDays ?? 1));
       setSchedule(t.shiftSchedule ?? {});
     }
     if (vendorsData.ok) {
@@ -162,6 +174,8 @@ export default function SettingsPage() {
     const previousSchedule = schedule;
     const previousAdminWhatsapp = adminWhatsapp;
     const previousReminderDays = paymentReminderDays;
+    const previousCoverage = forecastCoverageDays;
+    const previousSafety = forecastSafetyDays;
     setAdminWhatsappError("");
     const normalizedAdmin = adminWhatsapp.trim()
       ? normalizeIndianPhone(adminWhatsapp)
@@ -173,6 +187,8 @@ export default function SettingsPage() {
     }
     const nextSlippage = Math.round(Number(slippage));
     const nextReminderDays = Math.min(30, Math.max(1, Math.round(Number(paymentReminderDays) || 3)));
+    const nextCoverage = Math.min(60, Math.max(1, Math.round(Number(forecastCoverageDays) || 7)));
+    const nextSafety = Math.min(30, Math.max(0, Math.round(Number(forecastSafetyDays) || 0)));
     const nextSchedule = schedule;
     if (tenant) {
       setTenant({
@@ -181,6 +197,8 @@ export default function SettingsPage() {
         shiftSchedule: nextSchedule,
         adminWhatsappNumber: normalizedAdmin,
         paymentReminderDays: nextReminderDays,
+        forecastCoverageDays: nextCoverage,
+        forecastSafetyDays: nextSafety,
       });
     }
     setSettingsMsg("Saved");
@@ -193,6 +211,8 @@ export default function SettingsPage() {
           shiftSchedule: nextSchedule,
           adminWhatsappNumber: normalizedAdmin,
           paymentReminderDays: nextReminderDays,
+          forecastCoverageDays: nextCoverage,
+          forecastSafetyDays: nextSafety,
         }),
       });
       const data = await readJsonResponse<{
@@ -202,6 +222,8 @@ export default function SettingsPage() {
           shiftSchedule?: Record<DayKey, DayShift | null>;
           adminWhatsappNumber?: string | null;
           paymentReminderDays?: number;
+          forecastCoverageDays?: number;
+          forecastSafetyDays?: number;
         };
         error?: { message?: string; details?: unknown };
       }>(res);
@@ -216,12 +238,20 @@ export default function SettingsPage() {
               ? data.data.adminWhatsappNumber
               : normalizedAdmin,
           paymentReminderDays: data.data.paymentReminderDays ?? nextReminderDays,
+          forecastCoverageDays: data.data.forecastCoverageDays ?? nextCoverage,
+          forecastSafetyDays: data.data.forecastSafetyDays ?? nextSafety,
         });
         if (data.data.adminWhatsappNumber !== undefined) {
           setAdminWhatsapp(data.data.adminWhatsappNumber ?? "");
         }
         if (data.data.paymentReminderDays !== undefined) {
           setPaymentReminderDays(String(data.data.paymentReminderDays));
+        }
+        if (data.data.forecastCoverageDays !== undefined) {
+          setForecastCoverageDays(String(data.data.forecastCoverageDays));
+        }
+        if (data.data.forecastSafetyDays !== undefined) {
+          setForecastSafetyDays(String(data.data.forecastSafetyDays));
         }
       }
       setSettingsMsg("Saved");
@@ -231,6 +261,8 @@ export default function SettingsPage() {
       setSchedule(previousSchedule);
       setAdminWhatsapp(previousAdminWhatsapp);
       setPaymentReminderDays(previousReminderDays);
+      setForecastCoverageDays(previousCoverage);
+      setForecastSafetyDays(previousSafety);
       setSettingsMsg(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSavingSettings(false);
@@ -256,6 +288,7 @@ export default function SettingsPage() {
           whatsappNumber,
           creditPeriodDays: vendorCreditDays.trim() === "" ? null : Math.round(Number(vendorCreditDays)),
           email: vendorEmail.trim() || null,
+          leadTimeDays: Math.max(0, Math.round(Number(vendorLeadDays) || 2)),
         }),
       });
       const data = await readJsonResponse<{
@@ -276,6 +309,7 @@ export default function SettingsPage() {
       setVendorPhone("");
       setVendorEmail("");
       setVendorCreditDays("");
+      setVendorLeadDays("2");
     } catch (err) {
       setVendorError(err instanceof Error ? err.message : "Failed to add vendor");
     } finally {
@@ -308,6 +342,7 @@ export default function SettingsPage() {
     setEditVendorPhone(v.whatsappNumber);
     setEditVendorEmail(v.email ?? "");
     setEditVendorCreditDays(v.creditPeriodDays != null ? String(v.creditPeriodDays) : "");
+    setEditVendorLeadDays(String(v.leadTimeDays ?? 2));
     setVendorError("");
   }
 
@@ -317,6 +352,7 @@ export default function SettingsPage() {
     setEditVendorPhone("");
     setEditVendorEmail("");
     setEditVendorCreditDays("");
+    setEditVendorLeadDays("2");
     setVendorError("");
   }
 
@@ -340,6 +376,7 @@ export default function SettingsPage() {
           whatsappNumber,
           creditPeriodDays: editVendorCreditDays.trim() === "" ? null : Math.round(Number(editVendorCreditDays)),
           email: editVendorEmail.trim() || null,
+          leadTimeDays: Math.max(0, Math.round(Number(editVendorLeadDays) || 2)),
         }),
       });
       const data = await readJsonResponse<{
@@ -360,6 +397,7 @@ export default function SettingsPage() {
                     whatsappNumber: vendor.whatsappNumber,
                     email: vendor.email,
                     creditPeriodDays: vendor.creditPeriodDays,
+                    leadTimeDays: vendor.leadTimeDays,
                   }
                 : v,
             )
@@ -415,6 +453,23 @@ export default function SettingsPage() {
                 <li>x-pos-signature — HMAC-SHA256 hex of the raw JSON body (use POS Webhook Secret)</li>
               </ul>
             </div>
+          </div>
+
+          <div
+            className="rounded-xl p-5 space-y-2"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-sm font-medium">Past sales</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Import a POS CSV or Excel file for forecast history only. Stock is not deducted.
+            </p>
+            <Link
+              href="/admin/import-sales"
+              className="inline-block text-sm font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              Import past sales
+            </Link>
           </div>
 
           <form onSubmit={saveSettings} className="space-y-4">
@@ -608,6 +663,49 @@ export default function SettingsPage() {
               </label>
             </div>
 
+            <div
+              className="rounded-xl p-5 space-y-4"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            >
+              <p className="text-sm font-medium">Ordering</p>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  Order enough stock for (days)
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={forecastCoverageDays}
+                  onChange={(e) => setForecastCoverageDays(e.target.value)}
+                  className="rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  Order this many days early, just in case
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={forecastSafetyDays}
+                  onChange={(e) => setForecastSafetyDays(e.target.value)}
+                  className="rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: "var(--surface-elevated)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </label>
+            </div>
+
             {settingsMsg && (
               <p className="text-xs" style={{ color: settingsMsg.includes("failed") ? "var(--red)" : "var(--green)" }}>
                 {settingsMsg}
@@ -695,6 +793,24 @@ export default function SettingsPage() {
                             }}
                           />
                         </label>
+                        <label className="sm:col-span-2 flex flex-col gap-1">
+                          <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                            Lead time (days)
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={60}
+                            value={editVendorLeadDays}
+                            onChange={(e) => setEditVendorLeadDays(e.target.value)}
+                            className="rounded-lg px-3 py-2 text-sm outline-none"
+                            style={{
+                              background: "var(--surface)",
+                              border: "1px solid var(--border)",
+                              color: "var(--text-primary)",
+                            }}
+                          />
+                        </label>
                         <div className="sm:col-span-2 flex gap-2">
                           <button
                             type="submit"
@@ -727,6 +843,9 @@ export default function SettingsPage() {
                           <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                             Credit period:{" "}
                             {v.creditPeriodDays != null ? `${v.creditPeriodDays} days` : "Not set"}
+                          </p>
+                          <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            Lead time: {v.leadTimeDays ?? 2} days
                           </p>
                           {v.products && v.products.length > 0 ? (
                             <p className="mt-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -811,6 +930,20 @@ export default function SettingsPage() {
                 placeholder="Credit Period (days)"
                 value={vendorCreditDays}
                 onChange={(e) => setVendorCreditDays(e.target.value)}
+                className="rounded-lg px-3 py-2 text-sm outline-none"
+                style={{
+                  background: "var(--surface-elevated)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <input
+                type="number"
+                min={0}
+                max={60}
+                placeholder="Lead time (days)"
+                value={vendorLeadDays}
+                onChange={(e) => setVendorLeadDays(e.target.value)}
                 className="sm:col-span-2 rounded-lg px-3 py-2 text-sm outline-none"
                 style={{
                   background: "var(--surface-elevated)",

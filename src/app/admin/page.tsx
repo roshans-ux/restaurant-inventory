@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { AlertTriangle, Download, FileSpreadsheet, Package } from "lucide-react";
+import { AlertTriangle, Download, FileSpreadsheet, Info, Package } from "lucide-react";
 import Link from "next/link";
 import RecentSalesTable, { type RecentSaleRow } from "@/components/admin/RecentSalesTable";
 import StockActivityTable, { type StockActivityRow } from "@/components/admin/StockActivityTable";
@@ -14,6 +14,15 @@ import { shiftReportFilename } from "@/lib/shift-report-filename";
 import { todayDateParam } from "@/lib/sales-period";
 import { formatAppDateTime } from "@/lib/format-app-date";
 import { formatBottleSizeLabel } from "@/lib/product-naming";
+import {
+  ForecastStockMeta,
+  needsRestocking,
+  compareRestockUrgency,
+  stockLeftSummary,
+  type ForecastDisplay,
+} from "@/components/admin/ForecastStockMeta";
+import { istIsoDate } from "@/lib/forecast/dates";
+import { learningBannerFromReadiness, type LearningBannerState } from "@/lib/forecast/readiness";
 
 type Level = {
   productId: string;
@@ -22,6 +31,7 @@ type Level = {
   thresholdBottles: number | null;
   currentMl: number;
   bottleSizeMl: number;
+  forecast?: ForecastDisplay | null;
 };
 
 type Alert = {
@@ -85,6 +95,7 @@ export default function Dashboard() {
   const [shiftLoading, setShiftLoading] = useState(false);
   const [shiftError, setShiftError] = useState("");
   const [confirmEarly, setConfirmEarly] = useState(false);
+  const [learningBanner, setLearningBanner] = useState<LearningBannerState | null>(null);
 
   const loadShiftStatus = useCallback(async () => {
     const res = await fetch("/api/shift-report/status");
@@ -112,12 +123,29 @@ export default function Dashboard() {
         fetch("/api/inventory/activity"),
       ]);
       const [lvl, alrt, sales, act] = await Promise.all([
-        readJsonResponse<{ levels?: Level[] }>(lvlRes),
+        readJsonResponse<{
+          levels?: Level[];
+          learningBanner?: LearningBannerState | null;
+          learningBannerDays?: number | null;
+        }>(lvlRes),
         readJsonResponse<{ ok?: boolean; alerts?: Alert[] }>(alrtRes),
         readJsonResponse<{ ok?: boolean; data?: { sales?: RecentSaleRow[] } }>(salesRes),
         readJsonResponse<{ ok?: boolean; data?: { activity?: StockActivityRow[] } }>(actRes),
       ]);
-      setLevels(lvl.levels ?? []);
+      const nextLevels = lvl.levels ?? [];
+      setLevels(nextLevels);
+      setLearningBanner(
+        lvl.learningBanner?.kind === "awaiting_first_sale" || lvl.learningBanner?.kind === "countdown"
+          ? lvl.learningBanner
+          : learningBannerFromReadiness(
+              nextLevels.map((l) => ({
+                enoughData: Boolean(l.forecast?.enoughData),
+                saleCount: l.forecast?.saleCount ?? 0,
+                hasRecentSales: Boolean(l.forecast?.hasRecentSales),
+                daysSinceFirstSale: l.forecast?.daysSinceFirstSale ?? null,
+              })),
+            ),
+      );
       setAlerts(alrt.alerts ?? []);
       setRecentSales(sales.data?.sales ?? []);
       setActivity(act.data?.activity ?? []);
@@ -145,9 +173,18 @@ export default function Dashboard() {
     };
   }, [shiftPhase, loadShiftStatus]);
 
-  const belowThreshold = levels.filter(
-    (l) => l.thresholdBottles !== null && l.currentBottles < l.thresholdBottles,
-  );
+  const todayIso = istIsoDate();
+  const needsRestock = [...levels]
+    .filter((l) =>
+      needsRestocking({
+        currentMl: l.currentMl,
+        bottleSizeMl: l.bottleSizeMl,
+        thresholdBottles: l.thresholdBottles,
+        forecast: l.forecast,
+        todayIso,
+      }),
+    )
+    .sort((a, b) => compareRestockUrgency(a, b, todayIso));
 
   const totalFullBottles = levels.reduce(
     (s, l) => s + Math.floor(l.currentMl / l.bottleSizeMl),
@@ -165,10 +202,20 @@ export default function Dashboard() {
   );
   const sortedLevels = useMemo(() => {
     return [...levels].sort((a, b) => {
-      const aLow =
-        a.thresholdBottles !== null && a.currentBottles < a.thresholdBottles;
-      const bLow =
-        b.thresholdBottles !== null && b.currentBottles < b.thresholdBottles;
+      const aLow = needsRestocking({
+        currentMl: a.currentMl,
+        bottleSizeMl: a.bottleSizeMl,
+        thresholdBottles: a.thresholdBottles,
+        forecast: a.forecast,
+        todayIso,
+      });
+      const bLow = needsRestocking({
+        currentMl: b.currentMl,
+        bottleSizeMl: b.bottleSizeMl,
+        thresholdBottles: b.thresholdBottles,
+        forecast: b.forecast,
+        todayIso,
+      });
       let compare = 0;
       if (levelsSortField === "name") {
         compare = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
@@ -187,7 +234,7 @@ export default function Dashboard() {
       }
       return levelsSortDirection === "asc" ? compare : -compare;
     });
-  }, [levels, levelsSortDirection, levelsSortField]);
+  }, [levels, levelsSortDirection, levelsSortField, todayIso]);
 
   function onLevelsSort(field: LevelsSortField) {
     if (levelsSortField === field) {
@@ -310,6 +357,32 @@ export default function Dashboard() {
           Generate Shift Report
         </button>
       </div>
+
+      {learningBanner && (
+        <div
+          className="mb-6 flex flex-wrap items-start gap-3 rounded-xl px-4 py-3"
+          style={{
+            background: "var(--blue-dim)",
+            border: "1px solid rgba(96, 165, 250, 0.25)",
+          }}
+        >
+          <Info size={16} className="mt-0.5 shrink-0" style={{ color: "var(--blue)" }} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm leading-relaxed" style={{ color: "var(--blue)" }}>
+              {learningBanner.kind === "awaiting_first_sale"
+                ? "BarTally starts learning from your first sale. Forecasts will be ready about 14 days after that."
+                : `BarTally is learning your bar's sales patterns. Forecasts for all bottles ready in about ${learningBanner.days} ${learningBanner.days === 1 ? "day" : "days"}.`}
+            </p>
+            <Link
+              href="/admin/import-sales"
+              className="mt-1 inline-block text-sm font-medium"
+              style={{ color: "var(--accent)" }}
+            >
+              Skip the wait: import past sales
+            </Link>
+          </div>
+        </div>
+      )}
 
       {shiftBanner && shiftPhase !== "none" && (
         <div
@@ -440,22 +513,21 @@ export default function Dashboard() {
               sub="across all SKUs"
             />
             <StatCard
-              label="Below Threshold"
-              value={belowThreshold.length}
-              accent={belowThreshold.length > 0 ? "var(--red)" : "var(--green)"}
-              sub={belowThreshold.length > 0 ? "needs restocking" : "all good"}
+              label="Needs Restocking"
+              value={needsRestock.length}
+              accent={needsRestock.length > 0 ? "var(--red)" : "var(--green)"}
+              sub={needsRestock.length > 0 ? "order now or soon" : "all good"}
             />
           </div>
 
-          {belowThreshold.length > 0 && (
+          {needsRestock.length > 0 && (
             <section className="mb-8">
               <h2 className="mb-3 flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
                 <AlertTriangle size={14} style={{ color: "var(--red)" }} />
                 Needs Restocking
               </h2>
               <div className="grid gap-2">
-                {belowThreshold.map((l) => {
-                  const fullInStock = Math.floor(l.currentMl / l.bottleSizeMl);
+                {needsRestock.map((l) => {
                   const lowAlert = lowAlertByProductId.get(l.productId);
                   return (
                     <div
@@ -467,8 +539,20 @@ export default function Dashboard() {
                         {l.name} ({formatBottleSizeLabel(l.bottleSizeMl)})
                       </span>
                       <span className="text-right text-sm" style={{ color: "var(--red)" }}>
-                        {fullInStock} {fullInStock === 1 ? "bottle" : "bottles"} in stock / {l.thresholdBottles}{" "}
-                        minimum required {l.thresholdBottles === 1 ? "bottle" : "bottles"} in stock
+                        {stockLeftSummary({
+                          currentMl: l.currentMl,
+                          bottleSizeMl: l.bottleSizeMl,
+                          thresholdBottles: l.thresholdBottles,
+                          forecast: l.forecast,
+                          todayIso,
+                        })}
+                        <ForecastStockMeta
+                          forecast={l.forecast}
+                          todayIso={todayIso}
+                          currentMl={l.currentMl}
+                          bottleSizeMl={l.bottleSizeMl}
+                          thresholdBottles={l.thresholdBottles}
+                        />
                         {lowAlert && (
                           <span className="mt-0.5 block text-xs" style={{ color: "var(--text-muted)" }}>
                             Low since {formatAppDateTime(lowAlert.createdAt)}
@@ -520,7 +604,7 @@ export default function Dashboard() {
                         <span className="flex justify-end">{levelsHeaderButton("ml", "Current (ml)", "right")}</span>
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
-                        <span className="flex justify-end">{levelsHeaderButton("threshold", "Threshold", "right")}</span>
+                        <span className="flex justify-end">{levelsHeaderButton("threshold", "Keep at least", "right")}</span>
                       </th>
                       <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-widest">
                         <span className="flex justify-end">{levelsHeaderButton("status", "Status", "right")}</span>
@@ -529,7 +613,13 @@ export default function Dashboard() {
                   </thead>
                   <tbody>
                     {sortedLevels.map((l, i) => {
-                      const low = l.thresholdBottles !== null && l.currentBottles < l.thresholdBottles;
+                      const low = needsRestocking({
+                        currentMl: l.currentMl,
+                        bottleSizeMl: l.bottleSizeMl,
+                        thresholdBottles: l.thresholdBottles,
+                        forecast: l.forecast,
+                        todayIso,
+                      });
                       return (
                         <tr
                           key={l.productId}
@@ -540,6 +630,13 @@ export default function Dashboard() {
                         >
                           <td className="px-4 py-3 font-medium">
                             {l.name} ({formatBottleSizeLabel(l.bottleSizeMl)})
+                            <ForecastStockMeta
+                              forecast={l.forecast}
+                              todayIso={todayIso}
+                              currentMl={l.currentMl}
+                              bottleSizeMl={l.bottleSizeMl}
+                              thresholdBottles={l.thresholdBottles}
+                            />
                           </td>
                           <td
                             className="px-4 py-3 text-right text-xs"
