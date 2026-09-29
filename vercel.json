@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/restock-check",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-slippage",
+      "schedule": "30 4 * * 1"
     }
   ]
 }

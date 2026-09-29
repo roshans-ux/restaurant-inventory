@@ -1,8 +1,41 @@
+import { isTwilioConfigured, sendTwilioWhatsApp, toWhatsAppAddress } from "@/lib/twilio/whatsapp";
+import { isMetaWhatsAppConfigured, metaSendTemplate, metaSendText, type WhatsAppSendResult } from "@/lib/whatsapp/meta";
+import { toWhatsAppDigits } from "@/lib/whatsapp/phone";
+
+export type { WhatsAppSendResult };
+
+export function whatsappProvider(): "meta" | "twilio" {
+  return process.env.WHATSAPP_PROVIDER?.trim().toLowerCase() === "twilio" ? "twilio" : "meta";
+}
+
 export function isWhatsAppConfigured(): boolean {
-  return Boolean(
-    process.env.WHATSAPP_TOKEN?.trim() &&
-      process.env.WHATSAPP_PHONE_NUMBER_ID?.trim(),
-  );
+  return whatsappProvider() === "twilio" ? isTwilioConfigured() : isMetaWhatsAppConfigured();
+}
+
+export async function sendText(to: string, body: string, tenantId?: string | null): Promise<WhatsAppSendResult> {
+  if (whatsappProvider() === "twilio") {
+    const address = toWhatsAppAddress(to);
+    if (!address) return { ok: false, error: "Invalid WhatsApp number", templateNotApproved: false };
+    const ok = await sendTwilioWhatsApp(address, body);
+    return ok
+      ? { ok: true, messageId: "" }
+      : { ok: false, error: "Twilio WhatsApp send failed", templateNotApproved: false };
+  }
+  return metaSendText({ tenantId, to, body });
+}
+
+export async function sendTemplate(
+  to: string,
+  templateName: string,
+  params: string[],
+  buttonPayloads?: Array<string | null | undefined>,
+  tenantId?: string | null,
+): Promise<WhatsAppSendResult> {
+  if (whatsappProvider() === "twilio") {
+    const body = `${templateName}: ${params.join(" · ")}`;
+    return sendText(to, body, tenantId);
+  }
+  return metaSendTemplate({ tenantId, to, templateName, params, buttonPayloads });
 }
 
 export type AdminReorderPrompt = {
@@ -21,31 +54,14 @@ export type VendorOrderMessage = {
 };
 
 export async function sendAdminReorderPrompt(payload: AdminReorderPrompt): Promise<void> {
-  if (!isWhatsAppConfigured()) {
-    console.info("[whatsapp] skip admin prompt (API not connected)", {
-      stockOrderId: payload.stockOrderId,
-      hasAdminNumber: Boolean(payload.adminWhatsappNumber),
-    });
-    return;
-  }
-  if (!payload.adminWhatsappNumber) {
-    console.info("[whatsapp] skip admin prompt (no admin WhatsApp on Settings)", {
-      stockOrderId: payload.stockOrderId,
-    });
-    return;
-  }
-  // Meta Cloud send lands here when WHATSAPP_TOKEN is set.
-  console.info("[whatsapp] admin prompt queued", { stockOrderId: payload.stockOrderId });
+  if (!isWhatsAppConfigured() || !payload.adminWhatsappNumber) return;
+  console.info("[whatsapp] admin prompt deferred to batch window", { stockOrderId: payload.stockOrderId });
 }
 
 export async function sendVendorOrder(payload: VendorOrderMessage): Promise<void> {
-  if (!isWhatsAppConfigured()) {
-    console.info("[whatsapp] skip vendor order (API not connected)");
-    return;
-  }
-  if (!payload.vendorWhatsappNumber || payload.vendorWhatsappNumber === "—") {
-    console.info("[whatsapp] skip vendor order (no vendor WhatsApp)");
-    return;
-  }
-  console.info("[whatsapp] vendor order queued");
+  if (!isWhatsAppConfigured()) return;
+  if (!payload.vendorWhatsappNumber || payload.vendorWhatsappNumber === "—") return;
+  const to = toWhatsAppDigits(payload.vendorWhatsappNumber);
+  if (!to) return;
+  await sendText(to, payload.body);
 }

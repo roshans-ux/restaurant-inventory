@@ -92,6 +92,7 @@ model Tenant {
   bottleRotations  BottleRotation[]
   stockOrders      StockOrder[]
   salesImportBatches SalesImportBatch[]
+  whatsappMessages   WhatsAppMessageLog[]
 }
 
 model User {
@@ -330,6 +331,7 @@ model StockOrder {
   quantityBottles Int
   status          StockOrderStatus @default(PENDING)
   notes           String?
+  approvalBatchId String?
   placedAt        DateTime?
   cancelledAt     DateTime?
   createdAt       DateTime         @default(now())
@@ -342,6 +344,7 @@ model StockOrder {
 
   @@index([tenantId, status])
   @@index([tenantId, productId, status])
+  @@index([tenantId, approvalBatchId])
 }
 
 model StockOrderLog {
@@ -352,4 +355,20 @@ model StockOrderLog {
   stockOrder   StockOrder @relation(fields: [stockOrderId], references: [id], onDelete: Cascade)
 
   @@index([stockOrderId, createdAt])
+}
+
+model WhatsAppMessageLog {
+  id            String   @id @default(uuid())
+  tenantId      String?
+  templateName  String?
+  recipient     String
+  metaMessageId String?  @unique
+  direction     String
+  status        String
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }

@@ -88,6 +88,19 @@ export default function SettingsPage() {
   const [adminWhatsapp, setAdminWhatsapp] = useState("");
   const [adminWhatsappError, setAdminWhatsappError] = useState("");
   const [whatsappConnected, setWhatsappConnected] = useState(false);
+  const [whatsappMsgs, setWhatsappMsgs] = useState<
+    Array<{
+      id: string;
+      templateName: string | null;
+      recipient: string;
+      direction: string;
+      status: string;
+      error: string | null;
+      createdAt: string;
+    }>
+  >([]);
+  const [whatsappTestBusy, setWhatsappTestBusy] = useState<string | null>(null);
+  const [whatsappTestMsg, setWhatsappTestMsg] = useState("");
   const [vendorName, setVendorName] = useState("");
   const [vendorPhone, setVendorPhone] = useState("");
   const [vendorEmail, setVendorEmail] = useState("");
@@ -107,9 +120,10 @@ export default function SettingsPage() {
   const [editVendorLeadDays, setEditVendorLeadDays] = useState("2");
 
   async function loadAll() {
-    const [meRes, vendorsRes] = await Promise.all([
+    const [meRes, vendorsRes, waRes] = await Promise.all([
       fetch("/api/settings"),
       fetch("/api/vendors"),
+      fetch("/api/settings/whatsapp/messages"),
     ]);
     const meData = await readJsonResponse<{
       ok?: boolean;
@@ -143,6 +157,23 @@ export default function SettingsPage() {
     }
     if (vendorsData.ok) {
       setVendors(vendorsData.data?.vendors ?? []);
+    }
+    const waData = await readJsonResponse<{
+      ok?: boolean;
+      data?: {
+        messages?: Array<{
+          id: string;
+          templateName: string | null;
+          recipient: string;
+          direction: string;
+          status: string;
+          error: string | null;
+          createdAt: string;
+        }>;
+      };
+    }>(waRes);
+    if (waData.ok) {
+      setWhatsappMsgs(waData.data?.messages ?? []);
     }
     setLoading(false);
   }
@@ -520,15 +551,107 @@ export default function SettingsPage() {
                   </p>
                 )}
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  To receive WhatsApp order approvals, send *join twilio-trial* to +1 (737)
-                  250-8034 on WhatsApp from the number above.
-                </p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   {whatsappConnected
-                    ? "Low-stock order tickets will be sent to this number for Place or Cancel."
-                    : "Save the number now. No WhatsApp is sent until WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID are set, then the server is restarted."}
+                    ? "Low-stock order tickets will be sent to this number for Approve or Cancel."
+                    : "Save the number now. Messages send when WhatsApp Cloud API env vars are set and the server is restarted."}
                 </p>
               </label>
+              <div className="flex flex-wrap gap-2">
+                {(["order_approval", "morning_digest", "weekly_slippage"] as const).map((tpl) => (
+                  <button
+                    key={tpl}
+                    type="button"
+                    disabled={!whatsappConnected || Boolean(whatsappTestBusy)}
+                    onClick={async () => {
+                      setWhatsappTestMsg("");
+                      setWhatsappTestBusy(tpl);
+                      try {
+                        const res = await fetch("/api/settings/whatsapp/test", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ template: tpl }),
+                        });
+                        const data = await readJsonResponse<{
+                          ok?: boolean;
+                          error?: { message?: string; code?: string };
+                        }>(res);
+                        if (!res.ok || data.ok === false) {
+                          const code = data.error?.code ?? "";
+                          const msg = getApiErrorMessage(data, "Send failed");
+                          setWhatsappTestMsg(
+                            code === "WHATSAPP_TEMPLATE_NOT_APPROVED"
+                              ? `Template not approved: ${msg}`
+                              : msg,
+                          );
+                        } else {
+                          setWhatsappTestMsg(`Sent ${tpl.replaceAll("_", " ")}.`);
+                          const logs = await fetch("/api/settings/whatsapp/messages");
+                          const logData = await readJsonResponse<{
+                            ok?: boolean;
+                            data?: { messages?: typeof whatsappMsgs };
+                          }>(logs);
+                          if (logData.ok) setWhatsappMsgs(logData.data?.messages ?? []);
+                        }
+                      } finally {
+                        setWhatsappTestBusy(null);
+                      }
+                    }}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                    style={{ background: "var(--accent)", color: "#0e0e11" }}
+                  >
+                    {whatsappTestBusy === tpl ? "Sending…" : `Send test · ${tpl.replaceAll("_", " ")}`}
+                  </button>
+                ))}
+              </div>
+              {whatsappTestMsg && (
+                <p
+                  className="text-xs"
+                  style={{
+                    color: whatsappTestMsg.toLowerCase().includes("not approved") || whatsappTestMsg.toLowerCase().includes("fail")
+                      ? "var(--red)"
+                      : "var(--green)",
+                  }}
+                >
+                  {whatsappTestMsg}
+                </p>
+              )}
+              <div className="overflow-x-auto rounded-lg" style={{ border: "1px solid var(--border-subtle)" }}>
+                <table className="min-w-full text-left text-xs">
+                  <thead>
+                    <tr style={{ background: "var(--surface-elevated)", color: "var(--text-muted)" }}>
+                      <th className="px-3 py-2 font-medium">When</th>
+                      <th className="px-3 py-2 font-medium">Dir</th>
+                      <th className="px-3 py-2 font-medium">Template</th>
+                      <th className="px-3 py-2 font-medium">To / from</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {whatsappMsgs.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-2" colSpan={5} style={{ color: "var(--text-muted)" }}>
+                          No WhatsApp messages yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      whatsappMsgs.map((m) => (
+                        <tr key={m.id} style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                          <td className="px-3 py-2 whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
+                            {new Date(m.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2">{m.direction}</td>
+                          <td className="px-3 py-2">{m.templateName ?? "—"}</td>
+                          <td className="px-3 py-2 font-mono">{m.recipient}</td>
+                          <td className="px-3 py-2">
+                            {m.status}
+                            {m.error ? ` · ${m.error}` : ""}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div

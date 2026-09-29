@@ -1,12 +1,9 @@
 import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
-import {
-  isTwilioConfigured,
-  sendTwilioWhatsApp,
-  toWhatsAppAddress,
-} from "@/lib/twilio/whatsapp";
 import { sendVendorPlaceEmails } from "@/lib/vendor-place-emails";
+import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
+import { filterOrdersDueToday, sendOrderApprovalTemplate, stampApprovalBatch } from "@/lib/whatsapp/templates";
 
 export const ORDER_BATCH_WINDOW_MS = 2 * 60 * 60 * 1000;
 
@@ -53,7 +50,7 @@ Reply CONFIRM to send these orders to your vendors, or reply CANCEL to discard t
 }
 
 export function isOwnerWhatsAppPath(adminWhatsappNumber: string | null | undefined): boolean {
-  return isTwilioConfigured() && Boolean(adminWhatsappNumber?.trim());
+  return isWhatsAppConfigured() && Boolean(adminWhatsappNumber?.trim());
 }
 
 export function scheduleOrderBatchFlush(tenantId: string, windowStart: Date) {
@@ -129,6 +126,8 @@ export async function flushOrderBatch(tenantId: string): Promise<void> {
       product: {
         select: {
           name: true,
+          bottleSizeMl: true,
+          reorderConfig: { select: { thresholdBottles: true } },
           vendors: { select: { id: true, name: true, email: true } },
         },
       },
@@ -156,20 +155,26 @@ export async function flushOrderBatch(tenantId: string): Promise<void> {
     return;
   }
 
-  await prisma.stockOrder.updateMany({
-    where: { id: { in: orders.map((o) => o.id) } },
-    data: { status: StockOrderStatus.AWAITING_APPROVAL },
-  });
+  const dueOrders = await filterOrdersDueToday(tenantId, orders);
+  if (dueOrders.length === 0) {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { orderBatchWindowStart: null },
+    });
+    flushTimers.delete(tenantId);
+    return;
+  }
 
-  const lines = orders.map((order) =>
-    formatOwnerOrderLine(order.product.name, orderVendors(order)),
-  );
-  const body = buildOwnerApprovalMessage(tenant.name, lines);
-  const to = toWhatsAppAddress(tenant.adminWhatsappNumber!);
-  if (to) {
-    await sendTwilioWhatsApp(to, body);
-  } else {
-    console.error("[order-batch] invalid admin WhatsApp number", tenantId);
+  const batchId = await stampApprovalBatch(dueOrders.map((o) => o.id));
+  const result = await sendOrderApprovalTemplate({
+    tenantId,
+    venueName: tenant.name,
+    adminWhatsappNumber: tenant.adminWhatsappNumber!,
+    orders: dueOrders,
+    batchId,
+  });
+  if (!result.ok) {
+    console.error("[order-batch] WhatsApp approval send failed", result.error);
   }
 
   await prisma.tenant.update({
@@ -185,26 +190,48 @@ const orderNotifyInclude = {
   notifiedVendors: { select: { id: true, name: true, email: true } },
 } as const;
 
-export async function confirmAwaitingOrders(tenantId: string): Promise<{
+export async function confirmAwaitingOrders(
+  tenantId: string,
+  batchId?: string | null,
+): Promise<{
   count: number;
+  names: string[];
   emailWarnings: string[];
+  already: "approved" | "cancelled" | null;
 }> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { name: true },
   });
-  if (!tenant) return { count: 0, emailWarnings: [] };
+  if (!tenant) return { count: 0, names: [], emailWarnings: [], already: null };
 
+  const batchFilter = batchId ? { approvalBatchId: batchId } : {};
   const orders = await prisma.stockOrder.findMany({
-    where: { tenantId, status: StockOrderStatus.AWAITING_APPROVAL },
+    where: { tenantId, status: StockOrderStatus.AWAITING_APPROVAL, ...batchFilter },
     include: orderNotifyInclude,
   });
   if (orders.length === 0) {
-    await prisma.tenant.update({
-      where: { id: tenantId },
-      data: { orderBatchWindowStart: null },
+    const prior = await prisma.stockOrder.findMany({
+      where: {
+        tenantId,
+        ...batchFilter,
+        status: { in: [StockOrderStatus.PLACED, StockOrderStatus.CANCELLED] },
+      },
+      select: { status: true },
     });
-    return { count: 0, emailWarnings: [] };
+    const already =
+      prior.length === 0
+        ? null
+        : prior.every((o) => o.status === StockOrderStatus.CANCELLED)
+          ? "cancelled"
+          : "approved";
+    if (!batchId) {
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { orderBatchWindowStart: null },
+      });
+    }
+    return { count: 0, names: [], emailWarnings: [], already };
   }
 
   const now = new Date();
@@ -225,20 +252,40 @@ export async function confirmAwaitingOrders(tenantId: string): Promise<{
     data: { orderBatchWindowStart: null },
   });
 
-  return { count: orders.length, emailWarnings };
+  return { count: orders.length, names: orders.map((o) => o.product.name), emailWarnings, already: null };
 }
 
-export async function cancelAwaitingOrders(tenantId: string): Promise<number> {
+export async function cancelAwaitingOrders(
+  tenantId: string,
+  batchId?: string | null,
+): Promise<{ count: number; names: string[]; already: "approved" | "cancelled" | null }> {
+  const batchFilter = batchId ? { approvalBatchId: batchId } : {};
   const orders = await prisma.stockOrder.findMany({
-    where: { tenantId, status: StockOrderStatus.AWAITING_APPROVAL },
-    select: { id: true },
+    where: { tenantId, status: StockOrderStatus.AWAITING_APPROVAL, ...batchFilter },
+    select: { id: true, product: { select: { name: true } } },
   });
   if (orders.length === 0) {
-    await prisma.tenant.update({
-      where: { id: tenantId },
-      data: { orderBatchWindowStart: null },
+    const prior = await prisma.stockOrder.findMany({
+      where: {
+        tenantId,
+        ...batchFilter,
+        status: { in: [StockOrderStatus.PLACED, StockOrderStatus.CANCELLED] },
+      },
+      select: { status: true },
     });
-    return 0;
+    const already =
+      prior.length === 0
+        ? null
+        : prior.every((o) => o.status === StockOrderStatus.PLACED)
+          ? "approved"
+          : "cancelled";
+    if (!batchId) {
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { orderBatchWindowStart: null },
+      });
+    }
+    return { count: 0, names: [], already };
   }
 
   const now = new Date();
@@ -257,7 +304,7 @@ export async function cancelAwaitingOrders(tenantId: string): Promise<number> {
     where: { id: tenantId },
     data: { orderBatchWindowStart: null },
   });
-  return orders.length;
+  return { count: orders.length, names: orders.map((o) => o.product.name), already: null };
 }
 
 export function classifyOwnerReply(body: string): "confirm" | "cancel" | "unknown" {

@@ -58,7 +58,7 @@ function isPublicPath(pathname: string): boolean {
   }
   if (pathname === "/api/health") return true;
   if (pathname.startsWith("/api/webhooks/")) return true;
-  if (pathname === "/api/cron/order-batch") return true;
+  if (pathname.startsWith("/api/cron/")) return true;
   return false;
 }
 
