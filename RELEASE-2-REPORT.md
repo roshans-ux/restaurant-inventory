@@ -86,6 +86,6 @@ Production build command is `npx prisma db push && npm run build` (**no** `--acc
 
 ## Deploy
 
-- Branch: `forecasting` (not merged to `main`)
-- Preview alias: https://forecasting.bartally.in
+- Branch: `forecasting` @ `f7c888b` (not merged to `main`)
+- Preview: **Ready** — https://forecasting.bartally.in (build ~1m 32s, functions `sin1`)
 - Production / `main`: unchanged
