@@ -1,4 +1,4 @@
-import { StockOrderStatus } from "@prisma/client";
+import { AlertType, StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
 import { sendVendorPlaceEmails } from "@/lib/vendor-place-emails";
@@ -49,9 +49,22 @@ ${lines.join("\n")}
 Reply CONFIRM to send these orders to your vendors, or reply CANCEL to discard them.`;
 }
 
-export function isOwnerWhatsAppPath(adminWhatsappNumber: string | null | undefined): boolean {
-  return isWhatsAppConfigured() && Boolean(adminWhatsappNumber?.trim());
+export function isWhatsAppApprovalRequired(): boolean {
+  const raw = process.env.WHATSAPP_APPROVAL_REQUIRED?.trim().toLowerCase();
+  return raw === "true" || raw === "1" || raw === "yes";
 }
+
+export function isOwnerWhatsAppPath(adminWhatsappNumber: string | null | undefined): boolean {
+  return (
+    isWhatsAppApprovalRequired() &&
+    isWhatsAppConfigured() &&
+    Boolean(adminWhatsappNumber?.trim())
+  );
+}
+
+export const WHATSAPP_FAILED_NOTE = "WhatsApp failed";
+export const WHATSAPP_FAILED_ALERT =
+  "Couldn't reach owner on WhatsApp, approve in app";
 
 export function scheduleOrderBatchFlush(tenantId: string, windowStart: Date) {
   const existing = flushTimers.get(tenantId);
@@ -175,6 +188,7 @@ export async function flushOrderBatch(tenantId: string): Promise<void> {
   });
   if (!result.ok) {
     console.error("[order-batch] WhatsApp approval send failed", result.error);
+    await markWhatsAppNotifyFailed(tenantId, dueOrders);
   }
 
   await prisma.tenant.update({
@@ -182,6 +196,36 @@ export async function flushOrderBatch(tenantId: string): Promise<void> {
     data: { orderBatchWindowStart: null },
   });
   flushTimers.delete(tenantId);
+}
+
+async function markWhatsAppNotifyFailed(
+  tenantId: string,
+  orders: Array<{ id: string; productId: string; product: { name: string } }>,
+) {
+  const ids = orders.map((order) => order.id);
+  await prisma.stockOrder.updateMany({
+    where: { id: { in: ids } },
+    data: { notes: WHATSAPP_FAILED_NOTE },
+  });
+  for (const order of orders) {
+    await appendStockOrderLog(
+      prisma,
+      order.id,
+      "WhatsApp failed: owner could not be reached. Approve in the app to send vendor emails.",
+    );
+  }
+  const first = orders[0];
+  if (!first) return;
+  await prisma.alert.create({
+    data: {
+      productId: first.productId,
+      type: AlertType.WHATSAPP_FAILED,
+      message: WHATSAPP_FAILED_ALERT,
+      referenceKey: `whatsapp-failed:${tenantId}:${first.id}:${Date.now()}`,
+    },
+  }).catch((error) => {
+    console.error("[order-batch] failed to create WhatsApp failed alert", error);
+  });
 }
 
 const orderNotifyInclude = {

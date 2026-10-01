@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Bar Tally",
-    template: "%s · Bar Tally",
+    default: "BarTally",
+    template: "%s · BarTally",
   },
   description: "Alcohol inventory management with POS-driven depletion, built for bars",
 };

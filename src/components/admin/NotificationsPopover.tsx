@@ -42,6 +42,7 @@ const PANEL_WIDTH = 380;
 function typeLabel(type: AlertType, message: string, referenceKey?: string | null): string {
   if (referenceKey?.startsWith("restock-summary:")) return "Restock";
   if (type === AlertType.PAYMENT_REMINDER) return "Payment reminder";
+  if (type === AlertType.WHATSAPP_FAILED) return "WhatsApp";
   if (type !== AlertType.SLIPPAGE) return "Low stock";
   const kind = parseSlippageAlertKind(message);
   if (kind === "overpour") return "Overpour";
@@ -70,15 +71,19 @@ function NotificationRow({
       : isSlippage
         ? "var(--red)"
         : "var(--accent)";
-  const sizedName = formatProductNameWithSize(alert.product.name, Number(alert.product.bottleSizeMl));
+  const sizedName =
+    alert.type === AlertType.WHATSAPP_FAILED
+      ? "Stock orders"
+      : formatProductNameWithSize(alert.product.name, Number(alert.product.bottleSizeMl));
   const body = formatSlippageAlertBody(alert.message);
-  const displayMessage = isRestockSummary
-    ? alert.message
-    : body.includes(sizedName)
-      ? body
-      : body.includes(alert.product.name)
-        ? body.replace(alert.product.name, sizedName)
-        : body;
+  const displayMessage =
+    isRestockSummary || alert.type === AlertType.WHATSAPP_FAILED
+      ? alert.message
+      : body.includes(sizedName)
+        ? body
+        : body.includes(alert.product.name)
+          ? body.replace(alert.product.name, sizedName)
+          : body;
 
   return (
     <div

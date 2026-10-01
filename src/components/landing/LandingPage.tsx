@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronDown, CornerDownRight, Wine } from "lucide-react";
 import ThemeLightDocument from "@/components/ThemeLightDocument";
+import LandingFooter from "@/components/landing/LandingFooter";
 import "./landing.css";
 
 const UNSPLASH = {
@@ -274,7 +275,7 @@ function SlippageCalculator() {
 const FAQS = [
   {
     q: "Do I need to replace my existing POS system?",
-    a: "No. Bar Tally connects to your existing POS via a webhook. Your team keeps using the POS they know. Our system listens in the background and updates inventory automatically with every sale.",
+    a: "No. BarTally connects to your existing POS via a webhook. Your team keeps using the POS they know. Our system listens in the background and updates inventory automatically with every sale.",
   },
   {
     q: "What if my bar doesn't have a barcode scanner?",
@@ -333,7 +334,7 @@ export default function LandingPage() {
       <header className="lp-nav">
         <Link href="/" className="lp-logo">
           <Wine size={18} strokeWidth={2} />
-          <span>Bar Tally</span>
+          <span>BarTally</span>
         </Link>
         <nav className="lp-nav-links" aria-label="Sections">
           {HERO_NAV.map((item) => (
@@ -376,10 +377,10 @@ export default function LandingPage() {
           </p>
           <h1 className="lp-hero-wordmark">
             <span className="lp-marquee-track">
-              <span>Bar Tally</span>
-              <span aria-hidden>Bar Tally</span>
-              <span aria-hidden>Bar Tally</span>
-              <span aria-hidden>Bar Tally</span>
+              <span>BarTally</span>
+              <span aria-hidden>BarTally</span>
+              <span aria-hidden>BarTally</span>
+              <span aria-hidden>BarTally</span>
             </span>
           </h1>
         </div>
@@ -425,7 +426,7 @@ export default function LandingPage() {
         <div className="lp-about-body">
           <div data-reveal>
             <p className="lp-about-text">
-              Bar Tally is built for the realities of running a bar in India. Every bottle
+              BarTally is built for the realities of running a bar in India. Every bottle
               tracked, every pour accounted for, every shift closed with confidence. We built this
               because inventory loss is not a mystery —{" "}
               <em className="lp-italic">it is a measurement problem.</em>
@@ -621,13 +622,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="lp-footer">
-        <div className="lp-footer-left">
-          <span>Bar Tally</span>
-          <span>© 2026</span>
-        </div>
-        <span>Indian bars run differently. So does BarTally.</span>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

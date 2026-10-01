@@ -1,6 +1,7 @@
 {
-  "buildCommand": "npx prisma db push --accept-data-loss && npm run build",
+  "buildCommand": "npx prisma db push && npm run build",
   "installCommand": "npm install",
+  "regions": ["sin1"],
   "crons": [
     {
       "path": "/api/cron/order-batch",

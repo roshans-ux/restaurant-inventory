@@ -36,6 +36,7 @@ enum AlertType {
   LOW_STOCK
   SLIPPAGE
   PAYMENT_REMINDER
+  WHATSAPP_FAILED
 }
 
 enum ProductCategory {
