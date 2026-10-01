@@ -38,6 +38,8 @@ function isWhatsAppFailed(order: StockOrder): boolean {
   return order.status === "AWAITING_APPROVAL" && order.notes === WHATSAPP_FAILED_NOTE;
 }
 
+const CANCELLABLE = new Set(["PENDING", "MODIFIED", "PLACED", "AWAITING_APPROVAL"]);
+
 export default function StockOrdersPage() {
   const [orders, setOrders] = useState<StockOrder[]>([]);
   const [tab, setTab] = useState<Tab>("all");
