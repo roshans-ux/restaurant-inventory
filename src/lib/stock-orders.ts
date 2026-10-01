@@ -138,7 +138,7 @@ export async function maybeCreatePendingStockOrder(
     include: {
       product: { select: { name: true } },
       vendor: { select: { name: true } },
-      tenant: { select: { name: true, adminWhatsappNumber: true } },
+      tenant: { select: { name: true, adminWhatsappNumber: true, whatsappOrderApproval: true } },
     },
   });
 
@@ -148,7 +148,7 @@ export async function maybeCreatePendingStockOrder(
     createdReason,
   );
 
-  if (isOwnerWhatsAppPath(order.tenant.adminWhatsappNumber)) {
+  if (isOwnerWhatsAppPath(order.tenant)) {
     await ensureOrderBatchWindow(tenantId);
   }
   return { created: true, productName: order.product.name };

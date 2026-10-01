@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     const [tenant, orders] = await Promise.all([
       prisma.tenant.findUnique({
         where: { id: session.tenantId },
-        select: { name: true, adminWhatsappNumber: true },
+        select: { name: true, adminWhatsappNumber: true, whatsappOrderApproval: true },
       }),
       prisma.stockOrder.findMany({
         where: {
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const waitForOwner = isOwnerWhatsAppPath(tenant.adminWhatsappNumber);
+      const waitForOwner = isOwnerWhatsAppPath(tenant);
       const skuNamesByVendor = new Map<string, Set<string>>();
 
       await prisma.$transaction(async (tx) => {

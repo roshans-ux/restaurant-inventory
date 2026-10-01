@@ -31,12 +31,16 @@ function verifyMetaSignature(rawBody: string, header: string | null): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const expected = process.env.WHATSAPP_VERIFY_TOKEN?.trim();
+  if (!expected) {
+    return Response.json({ ok: false, error: "WhatsApp not configured" }, { status: 503 });
+  }
+
   const mode = request.nextUrl.searchParams.get("hub.mode");
   const token = request.nextUrl.searchParams.get("hub.verify_token");
   const challenge = request.nextUrl.searchParams.get("hub.challenge");
-  const expected = process.env.WHATSAPP_VERIFY_TOKEN?.trim();
 
-  if (mode === "subscribe" && expected && token === expected && challenge) {
+  if (mode === "subscribe" && token === expected && challenge) {
     return new Response(challenge, { status: 200, headers: { "Content-Type": "text/plain" } });
   }
   return new Response("Forbidden", { status: 403 });
@@ -342,6 +346,9 @@ async function processWebhook(json: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!process.env.WHATSAPP_APP_SECRET?.trim()) {
+    return Response.json({ ok: false, error: "WhatsApp not configured" }, { status: 200 });
+  }
   const raw = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
   if (!verifyMetaSignature(raw, signature)) {

@@ -50,8 +50,11 @@ export async function weeklySlippageSummary(tenantId: string): Promise<{
   };
 }
 
-export async function sendWeeklySlippageForTenant(tenantId: string): Promise<{ sent: boolean }> {
-  if (!isWhatsAppConfigured()) return { sent: false };
+export async function sendWeeklySlippageForTenant(tenantId: string): Promise<{
+  sent: boolean;
+  skipped?: string;
+}> {
+  if (!isWhatsAppConfigured()) return { sent: false, skipped: "WhatsApp not configured" };
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { name: true, adminWhatsappNumber: true },
@@ -76,7 +79,14 @@ export async function sendWeeklySlippageForTenant(tenantId: string): Promise<{ s
   return { sent: true };
 }
 
-export async function sendWeeklySlippageReports(): Promise<{ tenants: number; sent: number }> {
+export async function sendWeeklySlippageReports(): Promise<{
+  tenants: number;
+  sent: number;
+  skipped?: string;
+}> {
+  if (!isWhatsAppConfigured()) {
+    return { tenants: 0, sent: 0, skipped: "WhatsApp not configured" };
+  }
   const tenants = await prisma.tenant.findMany({
     where: { adminWhatsappNumber: { not: null } },
     select: { id: true },

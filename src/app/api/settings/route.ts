@@ -7,6 +7,7 @@ import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { DAY_KEYS, parseShiftSchedule } from "@/lib/shift-schedule";
 import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
+import { isWhatsAppApprovalRequired } from "@/lib/order-batch";
 import { revalidateForecastCache } from "@/lib/forecast/cache";
 
 const timeSchema = z.union([
@@ -31,6 +32,7 @@ const patchSchema = z.object({
   paymentReminderDays: z.number().int().min(1).max(30).optional(),
   forecastCoverageDays: z.number().int().min(1).max(60).optional(),
   forecastSafetyDays: z.number().int().min(0).max(30).optional(),
+  whatsappOrderApproval: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
         paymentReminderDays: true,
         forecastCoverageDays: true,
         forecastSafetyDays: true,
+        whatsappOrderApproval: true,
       },
     });
     if (!tenant) {
@@ -76,6 +79,7 @@ export async function GET(request: NextRequest) {
       posWebhookSecret,
       shiftSchedule: parseShiftSchedule(tenant.shiftSchedule),
       whatsappConnected: isWhatsAppConfigured(),
+      whatsappApprovalRequiredEnv: isWhatsAppApprovalRequired(),
     });
   } catch (error) {
     return apiError("SETTINGS_FETCH_FAILED", "Failed to fetch settings", 500, {
@@ -151,6 +155,9 @@ export async function PATCH(request: NextRequest) {
         ...(payload.forecastSafetyDays !== undefined
           ? { forecastSafetyDays: payload.forecastSafetyDays }
           : {}),
+        ...(payload.whatsappOrderApproval !== undefined
+          ? { whatsappOrderApproval: payload.whatsappOrderApproval }
+          : {}),
       },
       select: {
         slippageTolerancePercent: true,
@@ -159,6 +166,7 @@ export async function PATCH(request: NextRequest) {
         paymentReminderDays: true,
         forecastCoverageDays: true,
         forecastSafetyDays: true,
+        whatsappOrderApproval: true,
       },
     });
     revalidateForecastCache(session.tenantId);

@@ -25,6 +25,8 @@ type TenantInfo = {
   paymentReminderDays: number;
   forecastCoverageDays: number;
   forecastSafetyDays: number;
+  whatsappOrderApproval?: boolean;
+  whatsappApprovalRequiredEnv?: boolean;
 };
 
 type Vendor = {
@@ -118,6 +120,8 @@ export default function SettingsPage() {
   const [paymentReminderDays, setPaymentReminderDays] = useState("3");
   const [forecastCoverageDays, setForecastCoverageDays] = useState("7");
   const [forecastSafetyDays, setForecastSafetyDays] = useState("1");
+  const [whatsappOrderApproval, setWhatsappOrderApproval] = useState(false);
+  const [whatsappApprovalRequiredEnv, setWhatsappApprovalRequiredEnv] = useState(false);
   const [vendorLeadDays, setVendorLeadDays] = useState("2");
   const [editVendorLeadDays, setEditVendorLeadDays] = useState("2");
 
@@ -148,9 +152,13 @@ export default function SettingsPage() {
         paymentReminderDays: t.paymentReminderDays ?? 3,
         forecastCoverageDays: t.forecastCoverageDays ?? 7,
         forecastSafetyDays: t.forecastSafetyDays ?? 1,
+        whatsappOrderApproval: Boolean(t.whatsappOrderApproval),
+        whatsappApprovalRequiredEnv: Boolean(t.whatsappApprovalRequiredEnv),
       });
       setAdminWhatsapp(t.adminWhatsappNumber ?? "");
       setWhatsappConnected(Boolean(t.whatsappConnected));
+      setWhatsappOrderApproval(Boolean(t.whatsappOrderApproval));
+      setWhatsappApprovalRequiredEnv(Boolean(t.whatsappApprovalRequiredEnv));
       setSlippage(String(t.slippageTolerancePercent ?? 10));
       setPaymentReminderDays(String(t.paymentReminderDays ?? 3));
       setForecastCoverageDays(String(t.forecastCoverageDays ?? 7));
@@ -252,6 +260,7 @@ export default function SettingsPage() {
     const previousReminderDays = paymentReminderDays;
     const previousCoverage = forecastCoverageDays;
     const previousSafety = forecastSafetyDays;
+    const previousWhatsappApproval = whatsappOrderApproval;
     setAdminWhatsappError("");
     const normalizedAdmin = adminWhatsapp.trim()
       ? normalizeIndianPhone(adminWhatsapp)
@@ -275,6 +284,7 @@ export default function SettingsPage() {
         paymentReminderDays: nextReminderDays,
         forecastCoverageDays: nextCoverage,
         forecastSafetyDays: nextSafety,
+        whatsappOrderApproval,
       });
     }
     setSettingsMsg("Saved");
@@ -289,6 +299,7 @@ export default function SettingsPage() {
           paymentReminderDays: nextReminderDays,
           forecastCoverageDays: nextCoverage,
           forecastSafetyDays: nextSafety,
+          whatsappOrderApproval,
         }),
       });
       const data = await readJsonResponse<{
@@ -300,6 +311,7 @@ export default function SettingsPage() {
           paymentReminderDays?: number;
           forecastCoverageDays?: number;
           forecastSafetyDays?: number;
+          whatsappOrderApproval?: boolean;
         };
         error?: { message?: string; details?: unknown };
       }>(res);
@@ -316,6 +328,10 @@ export default function SettingsPage() {
           paymentReminderDays: data.data.paymentReminderDays ?? nextReminderDays,
           forecastCoverageDays: data.data.forecastCoverageDays ?? nextCoverage,
           forecastSafetyDays: data.data.forecastSafetyDays ?? nextSafety,
+          whatsappOrderApproval:
+            data.data.whatsappOrderApproval !== undefined
+              ? data.data.whatsappOrderApproval
+              : whatsappOrderApproval,
         });
         if (data.data.adminWhatsappNumber !== undefined) {
           setAdminWhatsapp(data.data.adminWhatsappNumber ?? "");
@@ -329,6 +345,9 @@ export default function SettingsPage() {
         if (data.data.forecastSafetyDays !== undefined) {
           setForecastSafetyDays(String(data.data.forecastSafetyDays));
         }
+        if (data.data.whatsappOrderApproval !== undefined) {
+          setWhatsappOrderApproval(data.data.whatsappOrderApproval);
+        }
       }
       setSettingsMsg("Saved");
     } catch (err) {
@@ -339,6 +358,7 @@ export default function SettingsPage() {
       setPaymentReminderDays(previousReminderDays);
       setForecastCoverageDays(previousCoverage);
       setForecastSafetyDays(previousSafety);
+      setWhatsappOrderApproval(previousWhatsappApproval);
       setSettingsMsg(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSavingSettings(false);
@@ -600,6 +620,22 @@ export default function SettingsPage() {
                     ? "Low-stock order tickets will be sent to this number for Approve or Cancel."
                     : "Save the number now. Messages send when WhatsApp Cloud API env vars are set and the server is restarted."}
                 </p>
+              </label>
+              <label className="flex items-start gap-3 rounded-lg px-3 py-2" style={{ background: "var(--surface-elevated)" }}>
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={whatsappOrderApproval}
+                  onChange={(e) => setWhatsappOrderApproval(e.target.checked)}
+                />
+                <span>
+                  <span className="block text-sm font-medium">Approve orders on WhatsApp</span>
+                  <span className="block text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    {whatsappOrderApproval && whatsappApprovalRequiredEnv && whatsappConnected
+                      ? "On: Place holds the vendor email until the owner Approves on WhatsApp."
+                      : "Off by default. Vendor emails send as soon as you Place. This only holds emails when this box is on, WhatsApp is connected, and the global approval flag is on."}
+                  </span>
+                </span>
               </label>
               <div className="flex flex-wrap gap-2">
                 {(["order_approval", "morning_digest", "weekly_slippage"] as const).map((tpl) => (

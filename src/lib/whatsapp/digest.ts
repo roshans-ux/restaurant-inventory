@@ -46,9 +46,12 @@ export async function paymentsDueNext7Days(tenantId: string): Promise<string[]> 
 
 export async function sendMorningDigestForTenant(tenantId: string): Promise<{
   sent: boolean;
+  skipped?: string;
   result?: import("@/lib/whatsapp/client").WhatsAppSendResult;
 }> {
-  if (!isWhatsAppConfigured()) return { sent: false };
+  if (!isWhatsAppConfigured()) {
+    return { sent: false, skipped: "WhatsApp not configured" };
+  }
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { name: true, adminWhatsappNumber: true },
@@ -89,7 +92,14 @@ export async function sendMorningDigestForTenant(tenantId: string): Promise<{
   return { sent: send.ok, result: send };
 }
 
-export async function sendMorningDigests(): Promise<{ tenants: number; sent: number }> {
+export async function sendMorningDigests(): Promise<{
+  tenants: number;
+  sent: number;
+  skipped?: string;
+}> {
+  if (!isWhatsAppConfigured()) {
+    return { tenants: 0, sent: 0, skipped: "WhatsApp not configured" };
+  }
   const tenants = await prisma.tenant.findMany({
     where: { adminWhatsappNumber: { not: null } },
     select: { id: true },

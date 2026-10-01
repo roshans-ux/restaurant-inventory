@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
   const session = await requireApiSession(request);
   if (!isSession(session)) return session;
   if (!isWhatsAppConfigured()) {
-    return apiError("WHATSAPP_NOT_CONFIGURED", "WhatsApp Cloud API is not connected", 400);
+    return apiError("WHATSAPP_NOT_CONFIGURED", "WhatsApp not configured", 400);
   }
 
   let template = "";

@@ -54,11 +54,18 @@ export function isWhatsAppApprovalRequired(): boolean {
   return raw === "true" || raw === "1" || raw === "yes";
 }
 
-export function isOwnerWhatsAppPath(adminWhatsappNumber: string | null | undefined): boolean {
+export type WhatsAppApprovalTenant = {
+  adminWhatsappNumber?: string | null;
+  whatsappOrderApproval?: boolean | null;
+};
+
+/** Owner WhatsApp approval runs only when the env flag AND the venue setting are on. */
+export function isOwnerWhatsAppPath(tenant: WhatsAppApprovalTenant): boolean {
   return (
     isWhatsAppApprovalRequired() &&
+    Boolean(tenant.whatsappOrderApproval) &&
     isWhatsAppConfigured() &&
-    Boolean(adminWhatsappNumber?.trim())
+    Boolean(tenant.adminWhatsappNumber?.trim())
   );
 }
 
@@ -115,6 +122,7 @@ export async function flushOrderBatch(tenantId: string): Promise<void> {
       id: true,
       name: true,
       adminWhatsappNumber: true,
+      whatsappOrderApproval: true,
       orderBatchWindowStart: true,
     },
   });
@@ -159,7 +167,7 @@ export async function flushOrderBatch(tenantId: string): Promise<void> {
     return;
   }
 
-  if (!isOwnerWhatsAppPath(tenant.adminWhatsappNumber)) {
+  if (!isOwnerWhatsAppPath(tenant)) {
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { orderBatchWindowStart: null },

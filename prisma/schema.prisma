@@ -78,6 +78,7 @@ model Tenant {
   adminWhatsappNumber        String?
   orderBatchWindowStart      DateTime?
   paymentReminderDays        Int       @default(3)
+  whatsappOrderApproval      Boolean   @default(false)
   forecastCoverageDays       Int       @default(7)
   forecastSafetyDays         Int       @default(1)
   salesImportColumnMapping   Json?

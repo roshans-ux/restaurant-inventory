@@ -8,6 +8,7 @@ import {
 } from "@/lib/order-batch";
 import {
   fromTwilioWhatsApp,
+  isTwilioConfigured,
   twimlMessage,
   validateTwilioSignature,
 } from "@/lib/twilio/whatsapp";
@@ -50,6 +51,9 @@ async function findTenantByWhatsApp(from: string) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isTwilioConfigured()) {
+    return twiml("WhatsApp not configured");
+  }
   const form = await request.formData();
   const params = formParams(form);
   const signature = request.headers.get("X-Twilio-Signature");
