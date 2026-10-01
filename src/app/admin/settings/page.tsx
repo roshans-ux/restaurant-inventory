@@ -95,12 +95,14 @@ export default function SettingsPage() {
       recipient: string;
       direction: string;
       status: string;
+      reason: string | null;
       error: string | null;
       createdAt: string;
     }>
   >([]);
   const [whatsappTestBusy, setWhatsappTestBusy] = useState<string | null>(null);
   const [whatsappTestMsg, setWhatsappTestMsg] = useState("");
+  const [whatsappNeedTestOrders, setWhatsappNeedTestOrders] = useState(false);
   const [vendorName, setVendorName] = useState("");
   const [vendorPhone, setVendorPhone] = useState("");
   const [vendorEmail, setVendorEmail] = useState("");
@@ -167,6 +169,7 @@ export default function SettingsPage() {
           recipient: string;
           direction: string;
           status: string;
+          reason: string | null;
           error: string | null;
           createdAt: string;
         }>;
@@ -176,6 +179,48 @@ export default function SettingsPage() {
       setWhatsappMsgs(waData.data?.messages ?? []);
     }
     setLoading(false);
+  }
+
+  async function sendWhatsAppTest(template: string, createTestOrders = false) {
+    setWhatsappTestMsg("");
+    if (!createTestOrders) setWhatsappNeedTestOrders(false);
+    setWhatsappTestBusy(createTestOrders ? "create-orders" : template);
+    try {
+      const res = await fetch("/api/settings/whatsapp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template, createTestOrders }),
+      });
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        error?: { message?: string; code?: string };
+      }>(res);
+      if (!res.ok || data.ok === false) {
+        const code = data.error?.code ?? "";
+        const msg = getApiErrorMessage(data, "Send failed");
+        if (code === "NO_PENDING_ORDERS") {
+          setWhatsappNeedTestOrders(true);
+          setWhatsappTestMsg("No pending orders to test with");
+        } else if (code === "WHATSAPP_TEMPLATE_NOT_APPROVED") {
+          setWhatsappTestMsg(`Template not approved: ${msg}`);
+        } else {
+          setWhatsappTestMsg(msg);
+        }
+        return;
+      }
+      setWhatsappNeedTestOrders(false);
+      setWhatsappTestMsg(
+        createTestOrders ? "Created test orders and sent order approval." : `Sent ${template.replaceAll("_", " ")}.`,
+      );
+      const logs = await fetch("/api/settings/whatsapp/messages");
+      const logData = await readJsonResponse<{
+        ok?: boolean;
+        data?: { messages?: typeof whatsappMsgs };
+      }>(logs);
+      if (logData.ok) setWhatsappMsgs(logData.data?.messages ?? []);
+    } finally {
+      setWhatsappTestBusy(null);
+    }
   }
 
   useEffect(() => {
@@ -562,40 +607,7 @@ export default function SettingsPage() {
                     key={tpl}
                     type="button"
                     disabled={!whatsappConnected || Boolean(whatsappTestBusy)}
-                    onClick={async () => {
-                      setWhatsappTestMsg("");
-                      setWhatsappTestBusy(tpl);
-                      try {
-                        const res = await fetch("/api/settings/whatsapp/test", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ template: tpl }),
-                        });
-                        const data = await readJsonResponse<{
-                          ok?: boolean;
-                          error?: { message?: string; code?: string };
-                        }>(res);
-                        if (!res.ok || data.ok === false) {
-                          const code = data.error?.code ?? "";
-                          const msg = getApiErrorMessage(data, "Send failed");
-                          setWhatsappTestMsg(
-                            code === "WHATSAPP_TEMPLATE_NOT_APPROVED"
-                              ? `Template not approved: ${msg}`
-                              : msg,
-                          );
-                        } else {
-                          setWhatsappTestMsg(`Sent ${tpl.replaceAll("_", " ")}.`);
-                          const logs = await fetch("/api/settings/whatsapp/messages");
-                          const logData = await readJsonResponse<{
-                            ok?: boolean;
-                            data?: { messages?: typeof whatsappMsgs };
-                          }>(logs);
-                          if (logData.ok) setWhatsappMsgs(logData.data?.messages ?? []);
-                        }
-                      } finally {
-                        setWhatsappTestBusy(null);
-                      }
-                    }}
+                    onClick={() => void sendWhatsAppTest(tpl)}
                     className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
                     style={{ background: "var(--accent)", color: "#0e0e11" }}
                   >
@@ -603,13 +615,31 @@ export default function SettingsPage() {
                   </button>
                 ))}
               </div>
-              {whatsappTestMsg && (
+              {whatsappNeedTestOrders && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs" style={{ color: "var(--text-primary)" }}>
+                    No pending orders to test with
+                  </p>
+                  <button
+                    type="button"
+                    disabled={!whatsappConnected || Boolean(whatsappTestBusy)}
+                    onClick={() => void sendWhatsAppTest("order_approval", true)}
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                    style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+                  >
+                    {whatsappTestBusy === "create-orders" ? "Creating…" : "Create test orders"}
+                  </button>
+                </div>
+              )}
+              {whatsappTestMsg && !whatsappNeedTestOrders && (
                 <p
                   className="text-xs"
                   style={{
-                    color: whatsappTestMsg.toLowerCase().includes("not approved") || whatsappTestMsg.toLowerCase().includes("fail")
-                      ? "var(--red)"
-                      : "var(--green)",
+                    color:
+                      whatsappTestMsg.toLowerCase().includes("not approved") ||
+                      whatsappTestMsg.toLowerCase().includes("fail")
+                        ? "var(--red)"
+                        : "var(--green)",
                   }}
                 >
                   {whatsappTestMsg}
@@ -644,6 +674,7 @@ export default function SettingsPage() {
                           <td className="px-3 py-2 font-mono">{m.recipient}</td>
                           <td className="px-3 py-2">
                             {m.status}
+                            {m.reason ? ` · ${m.reason}` : ""}
                             {m.error ? ` · ${m.error}` : ""}
                           </td>
                         </tr>

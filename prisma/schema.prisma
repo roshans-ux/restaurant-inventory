@@ -365,6 +365,7 @@ model WhatsAppMessageLog {
   metaMessageId String?  @unique
   direction     String
   status        String
+  reason        String?
   error         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

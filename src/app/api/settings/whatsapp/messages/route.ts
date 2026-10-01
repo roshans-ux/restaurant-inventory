@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
         recipient: m.recipient,
         direction: m.direction,
         status: m.status,
+        reason: m.reason,
         error: m.error,
         createdAt: m.createdAt.toISOString(),
       })),
