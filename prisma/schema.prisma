@@ -92,7 +92,8 @@ model Tenant {
   bottleRotations  BottleRotation[]
   stockOrders      StockOrder[]
   salesImportBatches SalesImportBatch[]
-  whatsappMessages   WhatsAppMessageLog[]
+  whatsappMessages       WhatsAppMessageLog[]
+  whatsappVenueSessions  WhatsAppVenueSession[]
 }
 
 model User {
@@ -372,4 +373,15 @@ model WhatsAppMessageLog {
   tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
+}
+
+model WhatsAppVenueSession {
+  phone     String   @id
+  tenantId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }

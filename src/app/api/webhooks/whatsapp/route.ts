@@ -1,6 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { afterResponse } from "@/lib/after-response";
 import { cancelAwaitingOrders, confirmAwaitingOrders } from "@/lib/order-batch";
 import { sendText } from "@/lib/whatsapp/client";
@@ -11,6 +10,15 @@ import {
 } from "@/lib/whatsapp/inbound";
 import { logWhatsAppMessage, updateWhatsAppStatus } from "@/lib/whatsapp/log";
 import { toWhatsAppDigits, whatsappPhonesMatch } from "@/lib/whatsapp/phone";
+import {
+  findTenantByApprovalBatch,
+  findTenantsByAdminPhone,
+  formatVenuePicker,
+  getVenueSession,
+  parseVenueChoice,
+  setVenueSession,
+  type AdminTenant,
+} from "@/lib/whatsapp/venue-session";
 
 function verifyMetaSignature(rawBody: string, header: string | null): boolean {
   const secret = process.env.WHATSAPP_APP_SECRET?.trim();
@@ -61,14 +69,6 @@ function parseIncoming(json: unknown): { messages: IncomingWhatsAppMessage[]; st
   return { messages, statuses };
 }
 
-async function findTenantByAdminPhone(from: string) {
-  const tenants = await prisma.tenant.findMany({
-    where: { adminWhatsappNumber: { not: null } },
-    select: { id: true, adminWhatsappNumber: true },
-  });
-  return tenants.find((t) => whatsappPhonesMatch(t.adminWhatsappNumber, from)) ?? null;
-}
-
 async function logInbound(args: {
   tenantId: string | null;
   from: string;
@@ -88,34 +88,25 @@ async function logInbound(args: {
   });
 }
 
-async function handleButton(
+async function handleButtonAction(
   tenantId: string,
   to: string,
-  payload: string,
+  action: "APPROVE_ALL" | "CANCEL",
+  batchId: string,
 ): Promise<{ reason: string | null }> {
-  const parsed = parseApprovalPayload(payload);
-  if (!parsed) {
-    console.error("[whatsapp-webhook] unknown payload", { tenantId, payload });
-    return { reason: "unknown payload" };
-  }
-
   try {
-    if (parsed.action === "APPROVE_ALL") {
-      const result = await confirmAwaitingOrders(tenantId, parsed.batchId);
+    if (action === "APPROVE_ALL") {
+      const result = await confirmAwaitingOrders(tenantId, batchId);
       if (result.count === 0 && !result.already) {
-        console.error("[whatsapp-webhook] batch not found", {
-          tenantId,
-          action: parsed.action,
-          batchId: parsed.batchId,
-        });
+        console.error("[whatsapp-webhook] batch not found", { tenantId, action, batchId });
         await sendText(to, "There's nothing waiting for approval right now.", tenantId);
         return { reason: "batch not found" };
       }
       if (result.already) {
         console.error("[whatsapp-webhook] batch already handled", {
           tenantId,
-          action: parsed.action,
-          batchId: parsed.batchId,
+          action,
+          batchId,
           already: result.already,
         });
         await sendText(to, `These orders were already ${result.already}.`, tenantId);
@@ -130,21 +121,17 @@ async function handleButton(
       return { reason: null };
     }
 
-    const result = await cancelAwaitingOrders(tenantId, parsed.batchId);
+    const result = await cancelAwaitingOrders(tenantId, batchId);
     if (result.count === 0 && !result.already) {
-      console.error("[whatsapp-webhook] batch not found", {
-        tenantId,
-        action: parsed.action,
-        batchId: parsed.batchId,
-      });
+      console.error("[whatsapp-webhook] batch not found", { tenantId, action, batchId });
       await sendText(to, "There's nothing waiting for approval right now.", tenantId);
       return { reason: "batch not found" };
     }
     if (result.already) {
       console.error("[whatsapp-webhook] batch already handled", {
         tenantId,
-        action: parsed.action,
-        batchId: parsed.batchId,
+        action,
+        batchId,
         already: result.already,
       });
       await sendText(to, `These orders were already ${result.already}.`, tenantId);
@@ -154,14 +141,103 @@ async function handleButton(
     await sendText(to, `Cancelled ${result.count} order${result.count === 1 ? "" : "s"}: ${list}.`, tenantId);
     return { reason: null };
   } catch (error) {
-    console.error("[whatsapp-webhook] button action failed", {
-      tenantId,
-      action: parsed.action,
-      batchId: parsed.batchId,
-      error,
-    });
+    console.error("[whatsapp-webhook] button action failed", { tenantId, action, batchId, error });
     return { reason: "action failed" };
   }
+}
+
+async function handleButtonTap(from: string, message: IncomingWhatsAppMessage, payload: string) {
+  const parsed = parseApprovalPayload(payload);
+  if (!parsed) {
+    console.error("[whatsapp-webhook] skipped", { reason: "unknown payload", from, payload });
+    await logInbound({
+      tenantId: null,
+      from,
+      messageId: message.id,
+      type: message.type ?? "button",
+      reason: "unknown payload",
+      status: "ignored",
+    });
+    return;
+  }
+
+  const tenant = await findTenantByApprovalBatch(parsed.batchId);
+  if (!tenant) {
+    console.error("[whatsapp-webhook] skipped", {
+      reason: "batch not found",
+      from,
+      action: parsed.action,
+      batchId: parsed.batchId,
+    });
+    await logInbound({
+      tenantId: null,
+      from,
+      messageId: message.id,
+      type: message.type ?? "button",
+      reason: "batch not found",
+      status: "ignored",
+    });
+    await sendText(from, "There's nothing waiting for approval right now.");
+    return;
+  }
+
+  if (!whatsappPhonesMatch(tenant.adminWhatsappNumber, from)) {
+    console.error("[whatsapp-webhook] skipped", {
+      reason: "sender mismatch",
+      from,
+      tenantId: tenant.id,
+      action: parsed.action,
+      batchId: parsed.batchId,
+    });
+    await logInbound({
+      tenantId: tenant.id,
+      from,
+      messageId: message.id,
+      type: message.type ?? "button",
+      reason: "sender mismatch",
+      status: "ignored",
+    });
+    return;
+  }
+
+  const outcome = await handleButtonAction(tenant.id, from, parsed.action, parsed.batchId);
+  await logInbound({
+    tenantId: tenant.id,
+    from,
+    messageId: message.id,
+    type: message.type ?? "button",
+    reason: outcome.reason,
+    status: outcome.reason ? "ignored" : "received",
+  });
+}
+
+async function resolveTextTenant(
+  from: string,
+  textBody: string,
+): Promise<{ tenant: AdminTenant | null; reason: string | null; pickerSent?: boolean; venueSelected?: boolean }> {
+  const tenants = await findTenantsByAdminPhone(from);
+  if (tenants.length === 0) {
+    return { tenant: null, reason: "unknown sender" };
+  }
+  if (tenants.length === 1) {
+    return { tenant: tenants[0]!, reason: null };
+  }
+
+  const choice = parseVenueChoice(textBody, tenants.length);
+  if (choice) {
+    const selected = tenants[choice - 1]!;
+    await setVenueSession(from, selected.id);
+    return { tenant: selected, reason: null, venueSelected: true };
+  }
+
+  const session = await getVenueSession(from);
+  const sessionTenant = session ? tenants.find((t) => t.id === session.id) : null;
+  if (sessionTenant) {
+    return { tenant: sessionTenant, reason: null };
+  }
+
+  await sendText(from, formatVenuePicker(tenants));
+  return { tenant: null, reason: "multiple venues", pickerSent: true };
 }
 
 async function processWebhook(json: unknown) {
@@ -177,50 +253,53 @@ async function processWebhook(json: unknown) {
     const type = message.type ?? "unknown";
     const payload = extractReplyPayload(message);
     const textBody = message.text?.body?.trim() ?? "";
-    const tenant = await findTenantByAdminPhone(from);
-
-    if (!tenant) {
-      const reason = "unknown sender";
-      console.error("[whatsapp-webhook] skipped", {
-        reason,
-        from,
-        type,
-        payload: payload || null,
-      });
-      await logInbound({
-        tenantId: null,
-        from,
-        messageId: message.id,
-        type,
-        reason,
-      });
-      continue;
-    }
 
     if (payload) {
-      const outcome = await handleButton(tenant.id, from, payload);
-      await logInbound({
-        tenantId: tenant.id,
-        from,
-        messageId: message.id,
-        type,
-        reason: outcome.reason,
-        status: outcome.reason ? "ignored" : "received",
-      });
+      await handleButtonTap(from, message, payload);
       continue;
     }
 
     if (textBody) {
+      const resolved = await resolveTextTenant(from, textBody);
+      if (!resolved.tenant) {
+        console.error("[whatsapp-webhook] skipped", {
+          reason: resolved.reason,
+          from,
+          type,
+        });
+        await logInbound({
+          tenantId: null,
+          from,
+          messageId: message.id,
+          type,
+          reason: resolved.reason,
+          status: "ignored",
+        });
+        continue;
+      }
+
+      if (resolved.venueSelected) {
+        await sendText(from, `Using ${resolved.tenant.name}.`, resolved.tenant.id);
+        await logInbound({
+          tenantId: resolved.tenant.id,
+          from,
+          messageId: message.id,
+          type,
+          reason: null,
+        });
+        continue;
+      }
+
       const reason = "text ignored";
       console.error("[whatsapp-webhook] skipped", {
         reason,
-        tenantId: tenant.id,
+        tenantId: resolved.tenant.id,
         from,
         type,
         length: textBody.length,
       });
       await logInbound({
-        tenantId: tenant.id,
+        tenantId: resolved.tenant.id,
         from,
         messageId: message.id,
         type,
@@ -230,24 +309,18 @@ async function processWebhook(json: unknown) {
       await sendText(
         from,
         "Thanks. Replies aren't supported yet, open BarTally for details.",
-        tenant.id,
+        resolved.tenant.id,
       );
       continue;
     }
 
-    const reason = "unknown payload";
-    console.error("[whatsapp-webhook] skipped", {
-      reason,
-      tenantId: tenant.id,
-      from,
-      type,
-    });
+    console.error("[whatsapp-webhook] skipped", { reason: "unknown payload", from, type });
     await logInbound({
-      tenantId: tenant.id,
+      tenantId: null,
       from,
       messageId: message.id,
       type,
-      reason,
+      reason: "unknown payload",
       status: "ignored",
     });
   }
