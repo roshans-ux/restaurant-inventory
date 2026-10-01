@@ -1,0 +1,32 @@
+---
+description: Append a WORKLOG.md entry after every task
+alwaysApply: true
+---
+
+# Work log (always)
+
+After finishing any task, or stopping partway, **append** an entry to `WORKLOG.md` in the project root. Never skip this, even if the user did not ask. Do not wait to be reminded.
+
+- Newest entries at the **bottom**.
+- Keep entries short and factual. Write "not done" or "failed" honestly; never round up.
+- Do not rewrite or delete older entries unless the user asks.
+- `WORKLOG.md` is local-only (gitignored). Do not commit it.
+
+## Entry format
+
+```markdown
+## YYYY-MM-DD HH:MM IST · short task title
+- Asked: one line on what I asked for
+- Did: what you changed, in plain English
+- Files: list of files changed
+- Commits: hash and message, and whether pushed (and to which branch)
+- Checks: typecheck, build and test results, pass/fail
+- Database: which database you touched (dev / rehearsal / none), and confirm Production was not touched
+- Open issues: anything unfinished, risky or needing my decision
+```
+
+Use the user's local time (IST). If unknown, use the timestamp from the conversation.
+
+## Secrets
+
+Never write secrets into `WORKLOG.md`: no connection strings, passwords, tokens, API keys, or full hostnames of production databases. Say "rehearsal database" or "dev database" instead.
