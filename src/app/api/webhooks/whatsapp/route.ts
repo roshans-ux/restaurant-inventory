@@ -88,6 +88,17 @@ async function logInbound(args: {
   });
 }
 
+async function trySendConfirmation(to: string, body: string, tenantId?: string | null) {
+  try {
+    const result = await sendText(to, body, tenantId);
+    if (!result.ok) {
+      console.error("[whatsapp-webhook] confirmation send failed", { to, tenantId, error: result.error });
+    }
+  } catch (error) {
+    console.error("[whatsapp-webhook] confirmation send failed", { to, tenantId, error });
+  }
+}
+
 async function handleButtonAction(
   tenantId: string,
   to: string,
@@ -99,7 +110,7 @@ async function handleButtonAction(
       const result = await confirmAwaitingOrders(tenantId, batchId);
       if (result.count === 0 && !result.already) {
         console.error("[whatsapp-webhook] batch not found", { tenantId, action, batchId });
-        await sendText(to, "There's nothing waiting for approval right now.", tenantId);
+        await trySendConfirmation(to, "There's nothing waiting for approval right now.", tenantId);
         return { reason: "batch not found" };
       }
       if (result.already) {
@@ -109,11 +120,11 @@ async function handleButtonAction(
           batchId,
           already: result.already,
         });
-        await sendText(to, `These orders were already ${result.already}.`, tenantId);
+        await trySendConfirmation(to, `These orders were already ${result.already}.`, tenantId);
         return { reason: `already ${result.already}` };
       }
       const list = result.names.join(", ");
-      await sendText(
+      await trySendConfirmation(
         to,
         `Approved ${result.count} order${result.count === 1 ? "" : "s"}: ${list}. Vendors have been emailed.`,
         tenantId,
@@ -124,7 +135,7 @@ async function handleButtonAction(
     const result = await cancelAwaitingOrders(tenantId, batchId);
     if (result.count === 0 && !result.already) {
       console.error("[whatsapp-webhook] batch not found", { tenantId, action, batchId });
-      await sendText(to, "There's nothing waiting for approval right now.", tenantId);
+      await trySendConfirmation(to, "There's nothing waiting for approval right now.", tenantId);
       return { reason: "batch not found" };
     }
     if (result.already) {
@@ -134,11 +145,15 @@ async function handleButtonAction(
         batchId,
         already: result.already,
       });
-      await sendText(to, `These orders were already ${result.already}.`, tenantId);
+      await trySendConfirmation(to, `These orders were already ${result.already}.`, tenantId);
       return { reason: `already ${result.already}` };
     }
     const list = result.names.join(", ");
-    await sendText(to, `Cancelled ${result.count} order${result.count === 1 ? "" : "s"}: ${list}.`, tenantId);
+    await trySendConfirmation(
+      to,
+      `Cancelled ${result.count} order${result.count === 1 ? "" : "s"}: ${list}.`,
+      tenantId,
+    );
     return { reason: null };
   } catch (error) {
     console.error("[whatsapp-webhook] button action failed", { tenantId, action, batchId, error });
