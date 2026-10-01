@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronDown, CornerDownRight, Wine } from "lucide-react";
 import ThemeLightDocument from "@/components/ThemeLightDocument";
+import LandingFooter from "@/components/landing/LandingFooter";
 import "./landing.css";
 
 const UNSPLASH = {
@@ -621,13 +622,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer className="lp-footer">
-        <div className="lp-footer-left">
-          <span>Bar Tally</span>
-          <span>© 2026</span>
-        </div>
-        <span>Indian bars run differently. So does BarTally.</span>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

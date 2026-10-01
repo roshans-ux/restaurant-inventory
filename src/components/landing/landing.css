@@ -1002,18 +1002,119 @@ html:has(.landing-root) {
 .lp-footer {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 2rem var(--lp-gutter);
+  gap: 1.5rem 2.5rem;
+  padding: 2.5rem var(--lp-gutter) 3rem;
   border-top: 1px solid var(--lp-line);
   font-size: 0.8125rem;
+  line-height: 1.55;
   color: var(--lp-muted);
 }
 
-.lp-footer-left {
+.lp-footer-brand {
   display: flex;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.lp-footer-brand strong {
+  font-family: var(--lp-serif);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--lp-ink);
+}
+
+.lp-footer-mail {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.lp-footer-mail:hover {
+  color: var(--lp-accent);
+}
+
+.lp-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.lp-footer-links a {
+  color: var(--lp-ink);
+  text-decoration: none;
+}
+
+.lp-footer-links a:hover {
+  color: var(--lp-accent);
+}
+
+.lp-legal {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3.5rem var(--lp-gutter) 5rem;
+}
+
+.lp-legal .lp-h2 {
+  margin-bottom: 0.75rem;
+}
+
+.lp-legal-lead {
+  margin: 0 0 2.25rem;
+  font-size: 1.05rem;
+  color: var(--lp-muted);
+}
+
+.lp-legal h2 {
+  margin: 2.25rem 0 0.75rem;
+  font-family: var(--lp-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lp-legal p {
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--lp-muted);
+}
+
+.lp-legal a {
+  color: var(--lp-ink);
+  text-underline-offset: 0.18em;
+}
+
+.lp-legal a:hover {
+  color: var(--lp-accent);
+}
+
+.lp-legal-dl {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin: 0;
+}
+
+.lp-legal-dl dt {
+  margin: 0 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--lp-accent);
+}
+
+.lp-legal-dl dd {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--lp-ink);
+}
+
+.lp-legal-dl a {
+  color: inherit;
 }
 
 /* ---------- responsive ---------- */
