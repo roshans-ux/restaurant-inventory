@@ -11,7 +11,7 @@ export default function LandingSiteChrome({ children }: { children: React.ReactN
       <header className="lp-nav">
         <Link href="/" className="lp-logo">
           <Wine size={18} strokeWidth={2} />
-          <span>Bar Tally</span>
+          <span>BarTally</span>
         </Link>
         <nav className="lp-nav-links" aria-label="Legal">
           <Link href="/contact">
