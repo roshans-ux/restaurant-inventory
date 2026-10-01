@@ -3,7 +3,7 @@ import LandingSiteChrome from "@/components/landing/LandingSiteChrome";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Contact BarTally — address, email, and Udyam registration.",
+  description: "Contact BarTally — address and email.",
 };
 
 export default function ContactPage() {
@@ -26,10 +26,6 @@ export default function ContactPage() {
             <dd>
               <a href="mailto:roshan@bartally.in">roshan@bartally.in</a>
             </dd>
-          </div>
-          <div>
-            <dt>Udyam Registration</dt>
-            <dd>UDYAM-MH-33-0835794</dd>
           </div>
         </dl>
       </article>
