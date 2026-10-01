@@ -32,7 +32,11 @@ type StockOrder = {
   logs?: { id: string; message: string; createdAt: string }[];
 };
 
-const CANCELLABLE = new Set(["PENDING", "MODIFIED", "PLACED", "AWAITING_APPROVAL"]);
+const WHATSAPP_FAILED_NOTE = "WhatsApp failed";
+
+function isWhatsAppFailed(order: StockOrder): boolean {
+  return order.status === "AWAITING_APPROVAL" && order.notes === WHATSAPP_FAILED_NOTE;
+}
 
 export default function StockOrdersPage() {
   const [orders, setOrders] = useState<StockOrder[]>([]);
@@ -117,6 +121,7 @@ export default function StockOrdersPage() {
 
   const readOnly = tab === "cancelled";
   const awaitingOwner = orders.some((o) => o.status === "AWAITING_APPROVAL");
+  const whatsappFailed = orders.some((o) => isWhatsAppFailed(o));
 
   function onSort(field: SortField) {
     if (sortField === field) {
@@ -441,12 +446,16 @@ export default function StockOrdersPage() {
         <div
           className="mb-4 rounded-xl px-4 py-3 text-sm"
           style={{
-            background: "var(--accent-dim)",
-            border: "1px solid rgba(245, 166, 35, 0.35)",
-            color: "var(--accent)",
+            background: whatsappFailed ? "var(--red-dim)" : "var(--accent-dim)",
+            border: whatsappFailed
+              ? "1px solid rgba(224, 92, 92, 0.35)"
+              : "1px solid rgba(245, 166, 35, 0.35)",
+            color: whatsappFailed ? "var(--red)" : "var(--accent)",
           }}
         >
-          Orders are pending bar owner WhatsApp approval.
+          {whatsappFailed
+            ? "Couldn't reach owner on WhatsApp. Approve in this page to send vendor emails."
+            : "Orders are pending bar owner WhatsApp approval."}
         </div>
       )}
 
@@ -642,7 +651,9 @@ export default function StockOrdersPage() {
                         className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
                         style={{
                           background:
-                            o.status === "AWAITING_APPROVAL"
+                            isWhatsAppFailed(o)
+                              ? "var(--red-dim)"
+                              : o.status === "AWAITING_APPROVAL"
                               ? "var(--accent-dim)"
                               : o.status === "PENDING" || o.status === "MODIFIED"
                                 ? "var(--accent-dim)"
@@ -652,7 +663,9 @@ export default function StockOrdersPage() {
                                     ? "var(--surface)"
                                     : "var(--surface)",
                           color:
-                            o.status === "AWAITING_APPROVAL"
+                            isWhatsAppFailed(o)
+                              ? "var(--red)"
+                              : o.status === "AWAITING_APPROVAL"
                               ? "var(--accent)"
                               : o.status === "PENDING" || o.status === "MODIFIED"
                                 ? "var(--accent)"
@@ -661,7 +674,11 @@ export default function StockOrdersPage() {
                                   : "var(--text-muted)",
                         }}
                       >
-                        {o.status === "AWAITING_APPROVAL" ? "Awaiting owner approval" : o.status}
+                        {isWhatsAppFailed(o)
+                          ? "WhatsApp failed"
+                          : o.status === "AWAITING_APPROVAL"
+                            ? "Awaiting owner approval"
+                            : o.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
@@ -681,7 +698,7 @@ export default function StockOrdersPage() {
                               className="text-xs disabled:opacity-50"
                               style={{ color: "var(--accent)" }}
                             >
-                              Send anyway
+                              {isWhatsAppFailed(o) ? "Approve" : "Send anyway"}
                             </button>
                           )}
                           {canCancel && (

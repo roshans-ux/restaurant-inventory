@@ -70,7 +70,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       }
       const order = await prisma.stockOrder.update({
         where: { id },
-        data: { status: StockOrderStatus.PLACED, placedAt: new Date() },
+        data: { status: StockOrderStatus.PLACED, placedAt: new Date(), notes: null },
         include: {
           product: { select: { name: true } },
           vendor: { select: { id: true, name: true, email: true } },
