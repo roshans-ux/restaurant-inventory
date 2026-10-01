@@ -4,7 +4,15 @@
   "crons": [
     {
       "path": "/api/cron/order-batch",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/restock-check",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-slippage",
+      "schedule": "30 4 * * 1"
     }
   ]
 }
