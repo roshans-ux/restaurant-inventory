@@ -2,7 +2,7 @@ import { AlertType, StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
 import { sendVendorPlaceEmails } from "@/lib/vendor-place-emails";
-import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
+import { isWhatsAppConfigured, isWhatsAppEnabled } from "@/lib/whatsapp/client";
 import { filterOrdersDueToday, sendOrderApprovalTemplate, stampApprovalBatch } from "@/lib/whatsapp/templates";
 
 export const ORDER_BATCH_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -50,19 +50,20 @@ Reply CONFIRM to send these orders to your vendors, or reply CANCEL to discard t
 }
 
 export function isWhatsAppApprovalRequired(): boolean {
-  const raw = process.env.WHATSAPP_APPROVAL_REQUIRED?.trim().toLowerCase();
-  return raw === "true" || raw === "1" || raw === "yes";
+  return isWhatsAppEnabled();
 }
 
 export type WhatsAppApprovalTenant = {
   adminWhatsappNumber?: string | null;
+  whatsappUpdates?: boolean | null;
   whatsappOrderApproval?: boolean | null;
 };
 
-/** Owner WhatsApp approval runs only when the env flag AND the venue setting are on. */
+/** Holds vendor emails only when master env, venue updates, and venue approval are all on. */
 export function isOwnerWhatsAppPath(tenant: WhatsAppApprovalTenant): boolean {
   return (
-    isWhatsAppApprovalRequired() &&
+    isWhatsAppEnabled() &&
+    Boolean(tenant.whatsappUpdates) &&
     Boolean(tenant.whatsappOrderApproval) &&
     isWhatsAppConfigured() &&
     Boolean(tenant.adminWhatsappNumber?.trim())
@@ -122,6 +123,7 @@ export async function flushOrderBatch(tenantId: string): Promise<void> {
       id: true,
       name: true,
       adminWhatsappNumber: true,
+      whatsappUpdates: true,
       whatsappOrderApproval: true,
       orderBatchWindowStart: true,
     },

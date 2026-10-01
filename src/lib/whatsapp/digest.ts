@@ -2,6 +2,7 @@ import { StockMovementType, StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addIsoDays, istIsoDate } from "@/lib/forecast/dates";
 import { isWhatsAppConfigured, sendTemplate } from "@/lib/whatsapp/client";
+import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 import { joinTruncated } from "@/lib/whatsapp/sanitize";
 import { skuQtyLine, stampApprovalBatch } from "@/lib/whatsapp/templates";
 
@@ -49,14 +50,21 @@ export async function sendMorningDigestForTenant(tenantId: string): Promise<{
   skipped?: string;
   result?: import("@/lib/whatsapp/client").WhatsAppSendResult;
 }> {
-  if (!isWhatsAppConfigured()) {
+  if (!isWhatsAppEnabled() || !isWhatsAppConfigured()) {
     return { sent: false, skipped: "WhatsApp not configured" };
   }
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { name: true, adminWhatsappNumber: true },
+    select: {
+      name: true,
+      adminWhatsappNumber: true,
+      whatsappUpdates: true,
+      whatsappOrderApproval: true,
+    },
   });
-  if (!tenant?.adminWhatsappNumber) return { sent: false };
+  if (!tenant?.adminWhatsappNumber || !tenant.whatsappUpdates) {
+    return { sent: false, skipped: "WhatsApp updates off" };
+  }
 
   const pending = await prisma.stockOrder.findMany({
     where: {
@@ -72,7 +80,7 @@ export async function sendMorningDigestForTenant(tenantId: string): Promise<{
   if (pending.length === 0 && payments.length === 0) return { sent: false };
 
   let batchId: string | null = null;
-  if (pending.length > 0) {
+  if (pending.length > 0 && tenant.whatsappOrderApproval) {
     batchId = await stampApprovalBatch(pending.map((o) => o.id));
   }
 
@@ -97,11 +105,11 @@ export async function sendMorningDigests(): Promise<{
   sent: number;
   skipped?: string;
 }> {
-  if (!isWhatsAppConfigured()) {
+  if (!isWhatsAppEnabled() || !isWhatsAppConfigured()) {
     return { tenants: 0, sent: 0, skipped: "WhatsApp not configured" };
   }
   const tenants = await prisma.tenant.findMany({
-    where: { adminWhatsappNumber: { not: null } },
+    where: { whatsappUpdates: true, adminWhatsappNumber: { not: null } },
     select: { id: true },
   });
   let sent = 0;

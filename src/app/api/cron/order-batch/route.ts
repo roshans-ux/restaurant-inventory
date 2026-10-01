@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { flushDueOrderBatches } from "@/lib/order-batch";
-import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
+import { isWhatsAppConfigured, isWhatsAppEnabled } from "@/lib/whatsapp/client";
 
 function isAuthorized(request: NextRequest): boolean {
   if (request.headers.get("x-vercel-cron") === "1") return true;
@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
   await flushDueOrderBatches();
   return Response.json({
     ok: true,
-    ...(isWhatsAppConfigured() ? {} : { skipped: "WhatsApp not configured" }),
+    ...(isWhatsAppEnabled() && isWhatsAppConfigured()
+      ? {}
+      : { skipped: "WhatsApp not configured" }),
   });
 }

@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 /** Bump when schema/delegates change so dev hot-reload does not keep a stale client. */
-const PRISMA_CLIENT_GENERATION = "2026-10-01-whatsapp-order-approval";
+const PRISMA_CLIENT_GENERATION = "2026-10-01-whatsapp-updates";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;

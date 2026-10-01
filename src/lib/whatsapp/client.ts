@@ -1,6 +1,9 @@
 import { isTwilioConfigured, sendTwilioWhatsApp, toWhatsAppAddress } from "@/lib/twilio/whatsapp";
+import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 import { isMetaWhatsAppConfigured, metaSendTemplate, metaSendText, type WhatsAppSendResult } from "@/lib/whatsapp/meta";
 import { toWhatsAppDigits } from "@/lib/whatsapp/phone";
+
+export { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 
 export type { WhatsAppSendResult };
 
@@ -13,6 +16,9 @@ export function isWhatsAppConfigured(): boolean {
 }
 
 export async function sendText(to: string, body: string, tenantId?: string | null): Promise<WhatsAppSendResult> {
+  if (!isWhatsAppEnabled()) {
+    return { ok: false, error: "WhatsApp not configured", templateNotApproved: false };
+  }
   if (whatsappProvider() === "twilio") {
     const address = toWhatsAppAddress(to);
     if (!address) return { ok: false, error: "Invalid WhatsApp number", templateNotApproved: false };
@@ -31,6 +37,9 @@ export async function sendTemplate(
   buttonPayloads?: Array<string | null | undefined>,
   tenantId?: string | null,
 ): Promise<WhatsAppSendResult> {
+  if (!isWhatsAppEnabled()) {
+    return { ok: false, error: "WhatsApp not configured", templateNotApproved: false };
+  }
   if (whatsappProvider() === "twilio") {
     const body = `${templateName}: ${params.join(" · ")}`;
     return sendText(to, body, tenantId);
@@ -54,12 +63,12 @@ export type VendorOrderMessage = {
 };
 
 export async function sendAdminReorderPrompt(payload: AdminReorderPrompt): Promise<void> {
-  if (!isWhatsAppConfigured() || !payload.adminWhatsappNumber) return;
+  if (!isWhatsAppEnabled() || !isWhatsAppConfigured() || !payload.adminWhatsappNumber) return;
   console.info("[whatsapp] admin prompt deferred to batch window", { stockOrderId: payload.stockOrderId });
 }
 
 export async function sendVendorOrder(payload: VendorOrderMessage): Promise<void> {
-  if (!isWhatsAppConfigured()) return;
+  if (!isWhatsAppEnabled() || !isWhatsAppConfigured()) return;
   if (!payload.vendorWhatsappNumber || payload.vendorWhatsappNumber === "—") return;
   const to = toWhatsAppDigits(payload.vendorWhatsappNumber);
   if (!to) return;

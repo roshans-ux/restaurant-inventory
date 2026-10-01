@@ -138,7 +138,7 @@ export async function maybeCreatePendingStockOrder(
     include: {
       product: { select: { name: true } },
       vendor: { select: { name: true } },
-      tenant: { select: { name: true, adminWhatsappNumber: true, whatsappOrderApproval: true } },
+      tenant: { select: { name: true, adminWhatsappNumber: true, whatsappUpdates: true, whatsappOrderApproval: true } },
     },
   });
 

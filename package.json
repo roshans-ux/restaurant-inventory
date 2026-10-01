@@ -8,7 +8,7 @@
     "db:start": "prisma dev -d -n restaurant-inventory",
     "db:setup": "prisma db push && npm run seed",
     "dev:local": "npm run db:start && npm run db:setup && npm run dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",

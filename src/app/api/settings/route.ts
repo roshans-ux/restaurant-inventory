@@ -7,7 +7,7 @@ import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { DAY_KEYS, parseShiftSchedule } from "@/lib/shift-schedule";
 import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
-import { isWhatsAppApprovalRequired } from "@/lib/order-batch";
+import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 import { revalidateForecastCache } from "@/lib/forecast/cache";
 
 const timeSchema = z.union([
@@ -32,6 +32,7 @@ const patchSchema = z.object({
   paymentReminderDays: z.number().int().min(1).max(30).optional(),
   forecastCoverageDays: z.number().int().min(1).max(60).optional(),
   forecastSafetyDays: z.number().int().min(0).max(30).optional(),
+  whatsappUpdates: z.boolean().optional(),
   whatsappOrderApproval: z.boolean().optional(),
 });
 
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
         paymentReminderDays: true,
         forecastCoverageDays: true,
         forecastSafetyDays: true,
+        whatsappUpdates: true,
         whatsappOrderApproval: true,
       },
     });
@@ -79,7 +81,7 @@ export async function GET(request: NextRequest) {
       posWebhookSecret,
       shiftSchedule: parseShiftSchedule(tenant.shiftSchedule),
       whatsappConnected: isWhatsAppConfigured(),
-      whatsappApprovalRequiredEnv: isWhatsAppApprovalRequired(),
+      whatsappEnabled: isWhatsAppEnabled(),
     });
   } catch (error) {
     return apiError("SETTINGS_FETCH_FAILED", "Failed to fetch settings", 500, {
@@ -134,6 +136,28 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    const current = await prisma.tenant.findUnique({
+      where: { id: session.tenantId },
+      select: { whatsappUpdates: true, adminWhatsappNumber: true },
+    });
+    if (!current) {
+      return apiError("TENANT_NOT_FOUND", "Venue not found", 404);
+    }
+
+    const nextNumber =
+      adminWhatsappNumber !== undefined ? adminWhatsappNumber : current.adminWhatsappNumber;
+    const hasNumber = Boolean(nextNumber?.trim());
+    let nextUpdates = payload.whatsappUpdates;
+    let nextApproval = payload.whatsappOrderApproval;
+    if (!hasNumber) {
+      nextUpdates = false;
+      nextApproval = false;
+    } else if (nextUpdates === false) {
+      nextApproval = false;
+    } else if (nextApproval === true && !(nextUpdates ?? current.whatsappUpdates)) {
+      nextApproval = false;
+    }
+
     const updated = await prisma.tenant.update({
       where: { id: session.tenantId },
       data: {
@@ -155,9 +179,8 @@ export async function PATCH(request: NextRequest) {
         ...(payload.forecastSafetyDays !== undefined
           ? { forecastSafetyDays: payload.forecastSafetyDays }
           : {}),
-        ...(payload.whatsappOrderApproval !== undefined
-          ? { whatsappOrderApproval: payload.whatsappOrderApproval }
-          : {}),
+        ...(nextUpdates !== undefined ? { whatsappUpdates: nextUpdates } : {}),
+        ...(nextApproval !== undefined ? { whatsappOrderApproval: nextApproval } : {}),
       },
       select: {
         slippageTolerancePercent: true,
@@ -166,6 +189,7 @@ export async function PATCH(request: NextRequest) {
         paymentReminderDays: true,
         forecastCoverageDays: true,
         forecastSafetyDays: true,
+        whatsappUpdates: true,
         whatsappOrderApproval: true,
       },
     });

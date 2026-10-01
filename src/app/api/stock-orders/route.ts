@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     const [tenant, orders] = await Promise.all([
       prisma.tenant.findUnique({
         where: { id: session.tenantId },
-        select: { name: true, adminWhatsappNumber: true, whatsappOrderApproval: true },
+        select: { name: true, adminWhatsappNumber: true, whatsappUpdates: true, whatsappOrderApproval: true },
       }),
       prisma.stockOrder.findMany({
         where: {

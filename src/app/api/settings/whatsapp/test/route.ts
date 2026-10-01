@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { apiError, apiOk } from "@/lib/http";
 import { isSession, requireApiSession } from "@/lib/auth/require-session";
 import { appendStockOrderLog } from "@/lib/stock-order-log";
-import { isWhatsAppConfigured, sendTemplate, type WhatsAppSendResult } from "@/lib/whatsapp/client";
+import { isWhatsAppConfigured, sendTemplate, sendText, type WhatsAppSendResult } from "@/lib/whatsapp/client";
+import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 import { sendMorningDigestForTenant } from "@/lib/whatsapp/digest";
 import { sendWeeklySlippageForTenant, weeklySlippageSummary } from "@/lib/whatsapp/slippage-weekly";
 import { sendOrderApprovalTemplate, skuQtyLine, stampApprovalBatch } from "@/lib/whatsapp/templates";
@@ -86,7 +87,7 @@ async function createWhatsAppTestOrders(tenantId: string) {
 export async function POST(request: NextRequest) {
   const session = await requireApiSession(request);
   if (!isSession(session)) return session;
-  if (!isWhatsAppConfigured()) {
+  if (!isWhatsAppEnabled() || !isWhatsAppConfigured()) {
     return apiError("WHATSAPP_NOT_CONFIGURED", "WhatsApp not configured", 400);
   }
 
@@ -106,6 +107,17 @@ export async function POST(request: NextRequest) {
   });
   if (!tenant?.adminWhatsappNumber) {
     return apiError("ADMIN_WHATSAPP_MISSING", "Save an Admin WhatsApp number first", 400);
+  }
+
+  if (template === "connected") {
+    const send = await sendText(
+      tenant.adminWhatsappNumber,
+      `BarTally WhatsApp is connected for ${tenant.name}. You'll get morning updates and weekly slippage here.`,
+      session.tenantId,
+    );
+    const fail = failResult(send);
+    if (fail) return fail;
+    return apiOk({ sent: true, delivered: true, template });
   }
 
   if (template === "morning_digest") {

@@ -25,8 +25,9 @@ type TenantInfo = {
   paymentReminderDays: number;
   forecastCoverageDays: number;
   forecastSafetyDays: number;
+  whatsappUpdates?: boolean;
   whatsappOrderApproval?: boolean;
-  whatsappApprovalRequiredEnv?: boolean;
+  whatsappEnabled?: boolean;
 };
 
 type Vendor = {
@@ -120,8 +121,10 @@ export default function SettingsPage() {
   const [paymentReminderDays, setPaymentReminderDays] = useState("3");
   const [forecastCoverageDays, setForecastCoverageDays] = useState("7");
   const [forecastSafetyDays, setForecastSafetyDays] = useState("1");
+  const [whatsappUpdates, setWhatsappUpdates] = useState(false);
   const [whatsappOrderApproval, setWhatsappOrderApproval] = useState(false);
-  const [whatsappApprovalRequiredEnv, setWhatsappApprovalRequiredEnv] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [whatsappFlagsBusy, setWhatsappFlagsBusy] = useState(false);
   const [vendorLeadDays, setVendorLeadDays] = useState("2");
   const [editVendorLeadDays, setEditVendorLeadDays] = useState("2");
 
@@ -152,13 +155,15 @@ export default function SettingsPage() {
         paymentReminderDays: t.paymentReminderDays ?? 3,
         forecastCoverageDays: t.forecastCoverageDays ?? 7,
         forecastSafetyDays: t.forecastSafetyDays ?? 1,
+        whatsappUpdates: Boolean(t.whatsappUpdates),
         whatsappOrderApproval: Boolean(t.whatsappOrderApproval),
-        whatsappApprovalRequiredEnv: Boolean(t.whatsappApprovalRequiredEnv),
+        whatsappEnabled: Boolean(t.whatsappEnabled),
       });
       setAdminWhatsapp(t.adminWhatsappNumber ?? "");
       setWhatsappConnected(Boolean(t.whatsappConnected));
+      setWhatsappUpdates(Boolean(t.whatsappUpdates));
       setWhatsappOrderApproval(Boolean(t.whatsappOrderApproval));
-      setWhatsappApprovalRequiredEnv(Boolean(t.whatsappApprovalRequiredEnv));
+      setWhatsappEnabled(Boolean(t.whatsappEnabled));
       setSlippage(String(t.slippageTolerancePercent ?? 10));
       setPaymentReminderDays(String(t.paymentReminderDays ?? 3));
       setForecastCoverageDays(String(t.forecastCoverageDays ?? 7));
@@ -212,14 +217,18 @@ export default function SettingsPage() {
         } else if (code === "WHATSAPP_TEMPLATE_NOT_APPROVED") {
           setWhatsappTestMsg(`Template not approved: ${msg}`);
         } else {
-          setWhatsappTestMsg(msg);
+          setWhatsappTestMsg(template === "connected" ? `Not delivered: ${msg}` : msg);
         }
         return;
       }
       setWhatsappNeedTestOrders(false);
-      setWhatsappTestMsg(
-        createTestOrders ? "Created test orders and sent order approval." : `Sent ${template.replaceAll("_", " ")}.`,
-      );
+      if (template === "connected") {
+        setWhatsappTestMsg("Delivered: WhatsApp connected.");
+      } else {
+        setWhatsappTestMsg(
+          createTestOrders ? "Created test orders and sent order approval." : `Sent ${template.replaceAll("_", " ")}.`,
+        );
+      }
       const logs = await fetch("/api/settings/whatsapp/messages");
       const logData = await readJsonResponse<{
         ok?: boolean;
@@ -228,6 +237,57 @@ export default function SettingsPage() {
       if (logData.ok) setWhatsappMsgs(logData.data?.messages ?? []);
     } finally {
       setWhatsappTestBusy(null);
+    }
+  }
+
+  async function persistWhatsAppFlags(next: { updates: boolean; approval: boolean }) {
+    const savedNumber = Boolean(tenant?.adminWhatsappNumber?.trim());
+    if (!savedNumber) return;
+    const previousUpdates = whatsappUpdates;
+    const previousApproval = whatsappOrderApproval;
+    setWhatsappUpdates(next.updates);
+    setWhatsappOrderApproval(next.approval);
+    setWhatsappFlagsBusy(true);
+    setWhatsappTestMsg("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          whatsappUpdates: next.updates,
+          whatsappOrderApproval: next.approval,
+        }),
+      });
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        data?: { whatsappUpdates?: boolean; whatsappOrderApproval?: boolean };
+        error?: { message?: string };
+      }>(res);
+      if (!res.ok || data.ok === false) {
+        throw new Error(getApiErrorMessage(data, "Could not save WhatsApp settings"));
+      }
+      if (data.data?.whatsappUpdates !== undefined) setWhatsappUpdates(data.data.whatsappUpdates);
+      if (data.data?.whatsappOrderApproval !== undefined) {
+        setWhatsappOrderApproval(data.data.whatsappOrderApproval);
+      }
+      setTenant((prev) =>
+        prev
+          ? {
+              ...prev,
+              whatsappUpdates: data.data?.whatsappUpdates ?? next.updates,
+              whatsappOrderApproval: data.data?.whatsappOrderApproval ?? next.approval,
+            }
+          : prev,
+      );
+      if (next.updates && !previousUpdates) {
+        await sendWhatsAppTest("connected");
+      }
+    } catch (err) {
+      setWhatsappUpdates(previousUpdates);
+      setWhatsappOrderApproval(previousApproval);
+      setWhatsappTestMsg(err instanceof Error ? err.message : "Could not save WhatsApp settings");
+    } finally {
+      setWhatsappFlagsBusy(false);
     }
   }
 
@@ -260,6 +320,7 @@ export default function SettingsPage() {
     const previousReminderDays = paymentReminderDays;
     const previousCoverage = forecastCoverageDays;
     const previousSafety = forecastSafetyDays;
+    const previousWhatsappUpdates = whatsappUpdates;
     const previousWhatsappApproval = whatsappOrderApproval;
     setAdminWhatsappError("");
     const normalizedAdmin = adminWhatsapp.trim()
@@ -284,6 +345,7 @@ export default function SettingsPage() {
         paymentReminderDays: nextReminderDays,
         forecastCoverageDays: nextCoverage,
         forecastSafetyDays: nextSafety,
+        whatsappUpdates,
         whatsappOrderApproval,
       });
     }
@@ -299,6 +361,7 @@ export default function SettingsPage() {
           paymentReminderDays: nextReminderDays,
           forecastCoverageDays: nextCoverage,
           forecastSafetyDays: nextSafety,
+          whatsappUpdates,
           whatsappOrderApproval,
         }),
       });
@@ -311,6 +374,7 @@ export default function SettingsPage() {
           paymentReminderDays?: number;
           forecastCoverageDays?: number;
           forecastSafetyDays?: number;
+          whatsappUpdates?: boolean;
           whatsappOrderApproval?: boolean;
         };
         error?: { message?: string; details?: unknown };
@@ -328,6 +392,8 @@ export default function SettingsPage() {
           paymentReminderDays: data.data.paymentReminderDays ?? nextReminderDays,
           forecastCoverageDays: data.data.forecastCoverageDays ?? nextCoverage,
           forecastSafetyDays: data.data.forecastSafetyDays ?? nextSafety,
+          whatsappUpdates:
+            data.data.whatsappUpdates !== undefined ? data.data.whatsappUpdates : whatsappUpdates,
           whatsappOrderApproval:
             data.data.whatsappOrderApproval !== undefined
               ? data.data.whatsappOrderApproval
@@ -345,6 +411,9 @@ export default function SettingsPage() {
         if (data.data.forecastSafetyDays !== undefined) {
           setForecastSafetyDays(String(data.data.forecastSafetyDays));
         }
+        if (data.data.whatsappUpdates !== undefined) {
+          setWhatsappUpdates(data.data.whatsappUpdates);
+        }
         if (data.data.whatsappOrderApproval !== undefined) {
           setWhatsappOrderApproval(data.data.whatsappOrderApproval);
         }
@@ -358,6 +427,7 @@ export default function SettingsPage() {
       setPaymentReminderDays(previousReminderDays);
       setForecastCoverageDays(previousCoverage);
       setForecastSafetyDays(previousSafety);
+      setWhatsappUpdates(previousWhatsappUpdates);
       setWhatsappOrderApproval(previousWhatsappApproval);
       setSettingsMsg(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -616,27 +686,77 @@ export default function SettingsPage() {
                   </p>
                 )}
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  {whatsappConnected
-                    ? "Low-stock order tickets will be sent to this number for Approve or Cancel."
-                    : "Save the number now. Messages send when WhatsApp Cloud API env vars are set and the server is restarted."}
+                  Save this number first, then turn on WhatsApp updates for this venue.
                 </p>
               </label>
-              <label className="flex items-start gap-3 rounded-lg px-3 py-2" style={{ background: "var(--surface-elevated)" }}>
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={whatsappOrderApproval}
-                  onChange={(e) => setWhatsappOrderApproval(e.target.checked)}
-                />
-                <span>
-                  <span className="block text-sm font-medium">Approve orders on WhatsApp</span>
-                  <span className="block text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {whatsappOrderApproval && whatsappApprovalRequiredEnv && whatsappConnected
-                      ? "On: Place holds the vendor email until the owner Approves on WhatsApp."
-                      : "Off by default. Vendor emails send as soon as you Place. This only holds emails when this box is on, WhatsApp is connected, and the global approval flag is on."}
-                  </span>
-                </span>
-              </label>
+              {(() => {
+                const hasSavedNumber = Boolean(tenant.adminWhatsappNumber?.trim());
+                const togglesLocked = !hasSavedNumber || whatsappFlagsBusy;
+                return (
+                  <div className="space-y-2">
+                    <label
+                      className="flex items-start gap-3 rounded-lg px-3 py-2"
+                      style={{
+                        background: "var(--surface-elevated)",
+                        opacity: hasSavedNumber ? 1 : 0.5,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={whatsappUpdates}
+                        disabled={togglesLocked}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          void persistWhatsAppFlags({
+                            updates: on,
+                            approval: on ? whatsappOrderApproval : false,
+                          });
+                        }}
+                      />
+                      <span>
+                        <span className="block text-sm font-medium">Send WhatsApp updates</span>
+                        <span className="block text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                          Morning digest and weekly slippage to this number.
+                          {!hasSavedNumber
+                            ? " Save an Admin WhatsApp number to enable this."
+                            : !whatsappEnabled
+                              ? " Off for every venue until WHATSAPP_ENABLED is on."
+                              : ""}
+                        </span>
+                      </span>
+                    </label>
+                    {whatsappUpdates ? (
+                      <label
+                        className="flex items-start gap-3 rounded-lg px-3 py-2"
+                        style={{
+                          background: "var(--surface-elevated)",
+                          opacity: hasSavedNumber ? 1 : 0.5,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={whatsappOrderApproval}
+                          disabled={togglesLocked}
+                          onChange={(e) => {
+                            void persistWhatsAppFlags({
+                              updates: true,
+                              approval: e.target.checked,
+                            });
+                          }}
+                        />
+                        <span>
+                          <span className="block text-sm font-medium">Approve orders on WhatsApp</span>
+                          <span className="block text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                            Holds vendor emails until the owner Approves on WhatsApp. Otherwise emails go out when you Place.
+                          </span>
+                        </span>
+                      </label>
+                    ) : null}
+                  </div>
+                );
+              })()}
               <div className="flex flex-wrap gap-2">
                 {(["order_approval", "morning_digest", "weekly_slippage"] as const).map((tpl) => (
                   <button
@@ -673,7 +793,9 @@ export default function SettingsPage() {
                   style={{
                     color:
                       whatsappTestMsg.toLowerCase().includes("not approved") ||
-                      whatsappTestMsg.toLowerCase().includes("fail")
+                      whatsappTestMsg.toLowerCase().includes("fail") ||
+                      whatsappTestMsg.toLowerCase().includes("not delivered") ||
+                      whatsappTestMsg.toLowerCase().includes("not configured")
                         ? "var(--red)"
                         : "var(--green)",
                   }}

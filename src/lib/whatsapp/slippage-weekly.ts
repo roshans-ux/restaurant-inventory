@@ -2,6 +2,7 @@ import { BottleRotationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addIsoDays, istIsoDate } from "@/lib/forecast/dates";
 import { isWhatsAppConfigured, sendTemplate } from "@/lib/whatsapp/client";
+import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 import { indianNumber, sanitizeTemplateVar } from "@/lib/whatsapp/sanitize";
 
 export async function weeklySlippageSummary(tenantId: string): Promise<{
@@ -54,12 +55,16 @@ export async function sendWeeklySlippageForTenant(tenantId: string): Promise<{
   sent: boolean;
   skipped?: string;
 }> {
-  if (!isWhatsAppConfigured()) return { sent: false, skipped: "WhatsApp not configured" };
+  if (!isWhatsAppEnabled() || !isWhatsAppConfigured()) {
+    return { sent: false, skipped: "WhatsApp not configured" };
+  }
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { name: true, adminWhatsappNumber: true },
+    select: { name: true, adminWhatsappNumber: true, whatsappUpdates: true },
   });
-  if (!tenant?.adminWhatsappNumber) return { sent: false };
+  if (!tenant?.adminWhatsappNumber || !tenant.whatsappUpdates) {
+    return { sent: false, skipped: "WhatsApp updates off" };
+  }
   const summary = await weeklySlippageSummary(tenantId);
   if (!summary) return { sent: false };
 
@@ -84,11 +89,11 @@ export async function sendWeeklySlippageReports(): Promise<{
   sent: number;
   skipped?: string;
 }> {
-  if (!isWhatsAppConfigured()) {
+  if (!isWhatsAppEnabled() || !isWhatsAppConfigured()) {
     return { tenants: 0, sent: 0, skipped: "WhatsApp not configured" };
   }
   const tenants = await prisma.tenant.findMany({
-    where: { adminWhatsappNumber: { not: null } },
+    where: { whatsappUpdates: true, adminWhatsappNumber: { not: null } },
     select: { id: true },
   });
   let sent = 0;
