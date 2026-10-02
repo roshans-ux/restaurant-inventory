@@ -1,4 +1,6 @@
 const LIST_MAX = 900;
+const ITEM_LIMIT = 8;
+const ITEM_SEP = " • ";
 
 export function sanitizeTemplateVar(value: string): string {
   const cleaned = value.replace(/[\r\n]+/g, " ").replace(/ {4,}/g, " ").trim();
@@ -8,19 +10,22 @@ export function sanitizeTemplateVar(value: string): string {
 export function joinTruncated(items: string[], max = LIST_MAX): string {
   const cleaned = items.map((item) => sanitizeTemplateVar(item)).filter((item) => item !== "-");
   if (cleaned.length === 0) return "None";
-  const joined = cleaned.join(", ");
-  if (joined.length <= max) return sanitizeTemplateVar(joined);
-  const kept: string[] = [];
-  for (let i = 0; i < cleaned.length; i += 1) {
-    const rest = cleaned.length - i;
-    const suffix = ` +${rest} more`;
-    const candidate = kept.length ? `${kept.join(", ")}, ${cleaned[i]}` : cleaned[i]!;
-    if (kept.length > 0 && candidate.length + suffix.length > max) {
-      return sanitizeTemplateVar(`${kept.join(", ")} +${rest} more`);
-    }
-    kept.push(cleaned[i]!);
+
+  const visible = cleaned.slice(0, ITEM_LIMIT);
+  let extra = cleaned.length - visible.length;
+  let rows = visible;
+
+  const render = (kept: string[], more: number) => {
+    const base = kept.join(ITEM_SEP);
+    return more > 0 ? `${base} +${more} more, open BarTally` : base;
+  };
+
+  while (rows.length > 1 && render(rows, extra).length > max) {
+    extra += 1;
+    rows = rows.slice(0, -1);
   }
-  return sanitizeTemplateVar(kept.join(", "));
+
+  return sanitizeTemplateVar(render(rows, extra));
 }
 
 export function indianNumber(n: number): string {

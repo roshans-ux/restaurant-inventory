@@ -8,8 +8,7 @@ import { isWhatsAppConfigured, sendTemplate, sendText, type WhatsAppSendResult }
 import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 import { sendMorningDigestForTenant } from "@/lib/whatsapp/digest";
 import { sendWeeklySlippageForTenant, weeklySlippageSummary } from "@/lib/whatsapp/slippage-weekly";
-import { sendOrderApprovalTemplate, skuQtyLine, stampApprovalBatch } from "@/lib/whatsapp/templates";
-import { joinTruncated } from "@/lib/whatsapp/sanitize";
+import { sendOrderApprovalTemplate, stampApprovalBatch } from "@/lib/whatsapp/templates";
 
 const TEST_ORDER_NOTE = "whatsapp-test";
 const OPEN_ORDER_STATUSES: StockOrderStatus[] = [
@@ -184,7 +183,6 @@ export async function POST(request: NextRequest) {
       sent: true,
       template,
       createdTestOrders: createTestOrders,
-      itemLine: joinTruncated(pending.map((o) => skuQtyLine(o.product.name, o.quantityBottles))),
     });
   }
 

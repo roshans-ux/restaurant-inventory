@@ -244,20 +244,39 @@ const orderNotifyInclude = {
   notifiedVendors: { select: { id: true, name: true, email: true } },
 } as const;
 
+const confirmItemSelect = {
+  productId: true,
+  quantityBottles: true,
+  product: { select: { name: true } },
+} as const;
+
+export type WhatsAppConfirmResult = {
+  count: number;
+  venueName: string;
+  items: Array<{ productId: string; product: { name: string }; quantityBottles: number }>;
+  emailWarnings: string[];
+  already: "approved" | "cancelled" | null;
+};
+
+function confirmItems(
+  orders: Array<{ productId: string; quantityBottles: number; product: { name: string } }>,
+) {
+  return orders.map((o) => ({
+    productId: o.productId,
+    product: { name: o.product.name },
+    quantityBottles: o.quantityBottles,
+  }));
+}
+
 export async function confirmAwaitingOrders(
   tenantId: string,
   batchId?: string | null,
-): Promise<{
-  count: number;
-  names: string[];
-  emailWarnings: string[];
-  already: "approved" | "cancelled" | null;
-}> {
+): Promise<WhatsAppConfirmResult> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { name: true },
   });
-  if (!tenant) return { count: 0, names: [], emailWarnings: [], already: null };
+  if (!tenant) return { count: 0, venueName: "", items: [], emailWarnings: [], already: null };
 
   const batchFilter = batchId ? { approvalBatchId: batchId } : {};
   const orders = await prisma.stockOrder.findMany({
@@ -271,7 +290,7 @@ export async function confirmAwaitingOrders(
         ...batchFilter,
         status: { in: [StockOrderStatus.PLACED, StockOrderStatus.CANCELLED] },
       },
-      select: { status: true },
+      select: { ...confirmItemSelect, status: true },
     });
     const already =
       prior.length === 0
@@ -285,7 +304,13 @@ export async function confirmAwaitingOrders(
         data: { orderBatchWindowStart: null },
       });
     }
-    return { count: 0, names: [], emailWarnings: [], already };
+    return {
+      count: 0,
+      venueName: tenant.name,
+      items: confirmItems(prior),
+      emailWarnings: [],
+      already,
+    };
   }
 
   const now = new Date();
@@ -306,13 +331,24 @@ export async function confirmAwaitingOrders(
     data: { orderBatchWindowStart: null },
   });
 
-  return { count: orders.length, names: orders.map((o) => o.product.name), emailWarnings, already: null };
+  return {
+    count: orders.length,
+    venueName: tenant.name,
+    items: confirmItems(orders),
+    emailWarnings,
+    already: null,
+  };
 }
 
 export async function cancelAwaitingOrders(
   tenantId: string,
   batchId?: string | null,
-): Promise<{ count: number; names: string[]; already: "approved" | "cancelled" | null }> {
+): Promise<WhatsAppConfirmResult> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { name: true },
+  });
+  const venueName = tenant?.name ?? "";
   const openStatuses = [
     StockOrderStatus.AWAITING_APPROVAL,
     StockOrderStatus.PENDING,
@@ -322,7 +358,7 @@ export async function cancelAwaitingOrders(
     where: batchId
       ? { approvalBatchId: batchId, status: { in: openStatuses } }
       : { tenantId, status: StockOrderStatus.AWAITING_APPROVAL },
-    select: { id: true, tenantId: true, product: { select: { name: true } } },
+    select: { id: true, tenantId: true, ...confirmItemSelect },
   });
   if (orders.length === 0) {
     const prior = await prisma.stockOrder.findMany({
@@ -330,7 +366,7 @@ export async function cancelAwaitingOrders(
         ...(batchId ? { approvalBatchId: batchId } : { tenantId }),
         status: { in: [StockOrderStatus.PLACED, StockOrderStatus.CANCELLED] },
       },
-      select: { status: true },
+      select: { ...confirmItemSelect, status: true },
     });
     const already =
       prior.length === 0
@@ -344,7 +380,7 @@ export async function cancelAwaitingOrders(
         data: { orderBatchWindowStart: null },
       });
     }
-    return { count: 0, names: [], already };
+    return { count: 0, venueName, items: confirmItems(prior), emailWarnings: [], already };
   }
 
   const now = new Date();
@@ -364,7 +400,13 @@ export async function cancelAwaitingOrders(
     where: { id: { in: tenantIds } },
     data: { orderBatchWindowStart: null },
   });
-  return { count: orders.length, names: orders.map((o) => o.product.name), already: null };
+  return {
+    count: orders.length,
+    venueName,
+    items: confirmItems(orders),
+    emailWarnings: [],
+    already: null,
+  };
 }
 
 export function classifyOwnerReply(body: string): "confirm" | "cancel" | "unknown" {

@@ -3,13 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { addIsoDays, istIsoDate } from "@/lib/forecast/dates";
 import { isWhatsAppConfigured, sendTemplate } from "@/lib/whatsapp/client";
 import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
+import { getCachedForecastsForTenant } from "@/lib/forecast/cache";
 import { joinTruncated } from "@/lib/whatsapp/sanitize";
-import { skuQtyLine, stampApprovalBatch } from "@/lib/whatsapp/templates";
+import { formatTemplateOrderItems, stampApprovalBatch } from "@/lib/whatsapp/templates";
 
 function weekdayLabel(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1)).toLocaleDateString("en-IN", {
-    weekday: "short",
+    weekday: "long",
     timeZone: "UTC",
   });
 }
@@ -29,20 +30,17 @@ export async function paymentsDueNext7Days(tenantId: string): Promise<string[]> 
     include: { vendor: { select: { name: true } } },
   });
 
-  const groups = new Map<string, { vendor: string; dueIso: string; bottles: number }>();
+  const groups = new Map<string, { vendor: string; dueIso: string }>();
   for (const m of movements) {
     if (!m.paymentDueAt || !m.vendor) continue;
     const dueIso = istIsoDate(m.paymentDueAt);
     const key = `${m.vendor.name}:${dueIso}`;
-    const bottles = Number(m.quantityInput ?? 0);
-    const existing = groups.get(key);
-    if (existing) existing.bottles += bottles;
-    else groups.set(key, { vendor: m.vendor.name, dueIso, bottles });
+    if (!groups.has(key)) groups.set(key, { vendor: m.vendor.name, dueIso });
   }
 
-  return [...groups.values()].map(
-    (g) => `Rs. due to ${g.vendor} on ${weekdayLabel(g.dueIso)}`,
-  );
+  return [...groups.values()]
+    .sort((a, b) => a.dueIso.localeCompare(b.dueIso) || a.vendor.localeCompare(b.vendor, "en", { sensitivity: "base" }))
+    .map((g) => `${g.vendor} on ${weekdayLabel(g.dueIso)}`);
 }
 
 export async function sendMorningDigestForTenant(tenantId: string): Promise<{
@@ -84,10 +82,9 @@ export async function sendMorningDigestForTenant(tenantId: string): Promise<{
     batchId = await stampApprovalBatch(pending.map((o) => o.id));
   }
 
+  const forecasts = await getCachedForecastsForTenant(tenantId);
   const pendingLine =
-    pending.length > 0
-      ? joinTruncated(pending.map((o) => skuQtyLine(o.product.name, o.quantityBottles)))
-      : "None";
+    pending.length > 0 ? formatTemplateOrderItems(pending, forecasts) : "None";
   const payLine = payments.length > 0 ? joinTruncated(payments) : "None";
 
   const send = await sendTemplate(

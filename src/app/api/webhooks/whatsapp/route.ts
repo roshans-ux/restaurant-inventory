@@ -10,6 +10,7 @@ import {
 } from "@/lib/whatsapp/inbound";
 import { logWhatsAppMessage, updateWhatsAppStatus } from "@/lib/whatsapp/log";
 import { toWhatsAppDigits, whatsappPhonesMatch } from "@/lib/whatsapp/phone";
+import { formatWhatsAppConfirmationReply } from "@/lib/whatsapp/templates";
 import {
   findTenantByApprovalBatch,
   findTenantsByAdminPhone,
@@ -124,13 +125,28 @@ async function handleButtonAction(
           batchId,
           already: result.already,
         });
-        await trySendConfirmation(to, `These orders were already ${result.already}.`, tenantId);
+        await trySendConfirmation(
+          to,
+          await formatWhatsAppConfirmationReply({
+            tenantId,
+            venueName: result.venueName,
+            verb: result.already === "cancelled" ? "Cancelled" : "Approved",
+            already: true,
+            items: result.items,
+          }),
+          tenantId,
+        );
         return { reason: `already ${result.already}` };
       }
-      const list = result.names.join(", ");
       await trySendConfirmation(
         to,
-        `Approved ${result.count} order${result.count === 1 ? "" : "s"}: ${list}. Vendors have been emailed.`,
+        await formatWhatsAppConfirmationReply({
+          tenantId,
+          venueName: result.venueName,
+          verb: "Approved",
+          already: false,
+          items: result.items,
+        }),
         tenantId,
       );
       return { reason: null };
@@ -149,13 +165,28 @@ async function handleButtonAction(
         batchId,
         already: result.already,
       });
-      await trySendConfirmation(to, `These orders were already ${result.already}.`, tenantId);
+      await trySendConfirmation(
+        to,
+        await formatWhatsAppConfirmationReply({
+          tenantId,
+          venueName: result.venueName,
+          verb: result.already === "cancelled" ? "Cancelled" : "Approved",
+          already: true,
+          items: result.items,
+        }),
+        tenantId,
+      );
       return { reason: `already ${result.already}` };
     }
-    const list = result.names.join(", ");
     await trySendConfirmation(
       to,
-      `Cancelled ${result.count} order${result.count === 1 ? "" : "s"}: ${list}.`,
+      await formatWhatsAppConfirmationReply({
+        tenantId,
+        venueName: result.venueName,
+        verb: "Cancelled",
+        already: false,
+        items: result.items,
+      }),
       tenantId,
     );
     return { reason: null };

@@ -2,13 +2,67 @@ import { randomUUID } from "node:crypto";
 import { StockOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCachedForecastsForTenant } from "@/lib/forecast/cache";
+import type { TenantForecastMap } from "@/lib/forecast/compute";
 import { istIsoDate } from "@/lib/forecast/dates";
-import { isBelowKeepAtLeast, isForecastReorderDue } from "@/lib/forecast/restock";
+import { isBelowKeepAtLeast, isForecastReorderDue, restockUrgency } from "@/lib/forecast/restock";
 import { sendTemplate } from "@/lib/whatsapp/client";
 import { joinTruncated } from "@/lib/whatsapp/sanitize";
 
+export type WhatsAppOrderItem = {
+  productId: string;
+  product: { name: string };
+  quantityBottles: number;
+};
+
 export function skuQtyLine(name: string, qty: number): string {
   return `${name} (${qty})`;
+}
+
+export function sortOrdersByUrgency<T extends WhatsAppOrderItem>(
+  orders: T[],
+  forecasts: TenantForecastMap,
+  todayIso = istIsoDate(),
+): T[] {
+  return [...orders].sort((a, b) => {
+    const ua = restockUrgency({ todayIso, orderBy: forecasts[a.productId]?.orderBy ?? null });
+    const ub = restockUrgency({ todayIso, orderBy: forecasts[b.productId]?.orderBy ?? null });
+    if (ua.rank !== ub.rank) return ua.rank - ub.rank;
+    if (ua.rank === 0 && ua.overdueDays !== ub.overdueDays) {
+      return ub.overdueDays - ua.overdueDays;
+    }
+    return a.product.name.localeCompare(b.product.name, "en", { sensitivity: "base" });
+  });
+}
+
+export function formatTemplateOrderItems(
+  orders: WhatsAppOrderItem[],
+  forecasts: TenantForecastMap,
+): string {
+  return joinTruncated(
+    sortOrdersByUrgency(orders, forecasts).map((o) => skuQtyLine(o.product.name, o.quantityBottles)),
+  );
+}
+
+export async function formatWhatsAppConfirmationReply(args: {
+  tenantId: string;
+  venueName: string;
+  verb: "Approved" | "Cancelled";
+  already: boolean;
+  items: WhatsAppOrderItem[];
+}): Promise<string> {
+  const forecasts = await getCachedForecastsForTenant(args.tenantId);
+  const sorted = sortOrdersByUrgency(args.items, forecasts);
+  const count = sorted.length;
+  const plural = count === 1 ? "" : "s";
+  const first = args.already
+    ? `Already ${args.verb === "Approved" ? "approved" : "cancelled"} ${count} order${plural} for ${args.venueName}:`
+    : `${args.verb} ${count} order${plural} for ${args.venueName}:`;
+  const lines = sorted.map((o) => `• ${o.product.name} × ${o.quantityBottles}`);
+  const parts = [first, ...lines];
+  if (!args.already && args.verb === "Approved") {
+    parts.push("Vendors have been emailed.");
+  }
+  return parts.join("\n");
 }
 
 export async function filterOrdersDueToday<
@@ -47,10 +101,11 @@ export async function sendOrderApprovalTemplate(args: {
   tenantId: string;
   venueName: string;
   adminWhatsappNumber: string;
-  orders: Array<{ product: { name: string }; quantityBottles: number }>;
+  orders: WhatsAppOrderItem[];
   batchId: string;
 }) {
-  const items = joinTruncated(args.orders.map((o) => skuQtyLine(o.product.name, o.quantityBottles)));
+  const forecasts = await getCachedForecastsForTenant(args.tenantId);
+  const items = formatTemplateOrderItems(args.orders, forecasts);
   return sendTemplate(
     args.adminWhatsappNumber,
     "order_approval",
