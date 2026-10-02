@@ -1309,20 +1309,6 @@ html:has(.landing-root) {
   font-size: 0.92rem;
 }
 
-.lp-founding {
-  padding: 1.75rem 1.6rem;
-  border-radius: 16px;
-  border: 1px solid var(--lp-accent);
-  background: var(--lp-accent-soft);
-}
-
-.lp-founding-copy {
-  margin: 0;
-  font-family: var(--lp-serif);
-  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
-  line-height: 1.35;
-}
-
 .lp-pricing-worth {
   margin-top: 0;
 }

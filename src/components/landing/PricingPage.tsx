@@ -230,16 +230,6 @@ export default function PricingPage() {
         </ul>
       </section>
 
-      <section className="lp-section" data-reveal>
-        <div className="lp-founding">
-          <p className="lp-eyebrow">Offer</p>
-          <p className="lp-founding-copy">
-            From 1 January 2027, founding bars get Pro at ₹2,999/month, locked for 12 months, with
-            free setup. First 10 bars only.
-          </p>
-        </div>
-      </section>
-
       <section className="lp-cta lp-pricing-worth">
         <h2 data-reveal>Not sure yet?</h2>
         <p className="lp-cta-sub" data-reveal>
