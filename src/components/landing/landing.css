@@ -991,12 +991,6 @@ html:has(.landing-root) {
   filter: brightness(1.05);
 }
 
-.lp-calc-plans {
-  display: flex;
-  width: 100%;
-  margin-top: 0.75rem;
-}
-
 .lp-calc-compare {
   margin: 1.15rem 0 0.35rem;
   padding: 1.1rem 0 0.25rem;
@@ -1019,10 +1013,6 @@ html:has(.landing-root) {
   line-height: 1.2 !important;
   letter-spacing: -0.02em;
   color: #f5a623 !important;
-}
-
-.lp-calc-compare .lp-calc-cta {
-  margin-top: 0.85rem;
 }
 
 .lp-nav-menu-btn {

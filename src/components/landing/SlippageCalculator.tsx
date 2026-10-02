@@ -70,9 +70,6 @@ function ValueCompare({ monthly }: { monthly: number }) {
     return (
       <div className="lp-calc-compare">
         <p>Even small leaks add up. Here&apos;s what BarTally catches.</p>
-        <Link href="/pricing" className="lp-calc-cta">
-          See plans
-        </Link>
       </div>
     );
   }
@@ -96,9 +93,6 @@ function ValueCompare({ monthly }: { monthly: number }) {
       <p>
         Less than {days} {dayWord} of slippage covers a month of BarTally.
       </p>
-      <Link href="/pricing" className="lp-calc-cta">
-        See plans
-      </Link>
     </div>
   );
 }
