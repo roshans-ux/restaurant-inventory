@@ -40,8 +40,8 @@ const TIERS = [
     features: [
       { text: "Everything in Essentials" },
       { text: "Stock forecasting: know what runs out and when" },
-      { text: "Morning updates and weekly slippage reports on WhatsApp" },
-      { text: "Approve orders from your phone" },
+      { text: "Morning updates and weekly slippage reports on WhatsApp", tag: "Coming soon" },
+      { text: "Approve orders from your phone", tag: "Coming soon" },
       { text: "Payment reminders for vendor bills" },
       { text: "Orders sent to vendors on WhatsApp", tag: "Coming soon" },
     ],
