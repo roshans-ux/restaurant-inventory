@@ -1003,6 +1003,34 @@ html:has(.landing-root) {
   margin-top: 0.75rem;
 }
 
+.lp-calc-compare {
+  margin: 1.15rem 0 0.35rem;
+  padding: 1.1rem 0 0.25rem;
+  border-bottom: 1px solid #222;
+}
+
+.lp-calc-compare p {
+  margin: 0 0 0.55rem;
+  font-family: var(--lp-sans);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #ddd;
+}
+
+.lp-calc-compare-hero {
+  margin: 0.85rem 0 0.75rem !important;
+  font-family: var(--lp-serif) !important;
+  font-size: clamp(1.45rem, 2.6vw, 1.95rem) !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.02em;
+  color: #f5a623 !important;
+}
+
+.lp-calc-compare .lp-calc-cta {
+  margin-top: 0.85rem;
+}
+
 .lp-nav-menu-btn {
   display: none;
   align-items: center;

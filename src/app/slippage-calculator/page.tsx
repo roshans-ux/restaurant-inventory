@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import LandingSiteChrome from "@/components/landing/LandingSiteChrome";
 import SlippageCalculator from "@/components/landing/SlippageCalculator";
 
@@ -18,13 +17,7 @@ export default function SlippageCalculatorPage() {
           Enter your numbers, pick where your bar honestly sits, and see the monthly cost of
           untracked alcohol.
         </p>
-        <SlippageCalculator
-          afterResult={
-            <Link href="/pricing" className="lp-btn lp-btn-ghost lp-calc-plans">
-              See plans
-            </Link>
-          }
-        />
+        <SlippageCalculator />
       </section>
     </LandingSiteChrome>
   );

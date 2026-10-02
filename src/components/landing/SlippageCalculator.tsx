@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 
 export const SLIPPAGE_BUCKETS = [
@@ -58,11 +58,52 @@ function formatRupeesCompact(value: number): string {
   return `₹${Math.round(n)}`;
 }
 
-export default function SlippageCalculator({
-  afterResult,
-}: {
-  afterResult?: ReactNode;
-}) {
+function formatInr(value: number): string {
+  return `₹${Math.round(Math.max(0, value)).toLocaleString("en-IN")}`;
+}
+
+const PRO_MONTHLY = 3999;
+const ESSENTIALS_MONTHLY = 1999;
+
+function ValueCompare({ monthly }: { monthly: number }) {
+  if (monthly < ESSENTIALS_MONTHLY) {
+    return (
+      <div className="lp-calc-compare">
+        <p>Even small leaks add up. Here&apos;s what BarTally catches.</p>
+        <Link href="/pricing" className="lp-calc-cta">
+          See plans
+        </Link>
+      </div>
+    );
+  }
+
+  const planPrice = monthly < PRO_MONTHLY ? ESSENTIALS_MONTHLY : PRO_MONTHLY;
+  const planName = planPrice === PRO_MONTHLY ? "BarTally Pro" : "BarTally Essentials";
+  const annual = monthly * 12;
+  const multiple = Math.round(monthly / planPrice);
+  const days = Math.max(1, Math.ceil(planPrice / (monthly / 30)));
+  const dayWord = days === 1 ? "day" : "days";
+  const multipleLine =
+    multiple <= 1
+      ? `That's about the cost of ${planName}.`
+      : `That's ${multiple}× the cost of ${planName}.`;
+
+  return (
+    <div className="lp-calc-compare">
+      <p>You&apos;re losing about {formatInr(monthly)} a month to slippage.</p>
+      <p>That&apos;s {formatInr(annual)} a year.</p>
+      <p className="lp-calc-compare-hero">{multipleLine}</p>
+      <p>
+        Less than {days} {dayWord} of slippage covers a month of BarTally.
+      </p>
+      <Link href="/pricing" className="lp-calc-cta">
+        See plans
+      </Link>
+    </div>
+  );
+}
+
+export default function SlippageCalculator() {
   const [bottles, setBottles] = useState(100);
   const [cost, setCost] = useState(1500);
   const [bucketId, setBucketId] = useState<(typeof SLIPPAGE_BUCKETS)[number]["id"]>("average");
@@ -135,6 +176,7 @@ export default function SlippageCalculator({
             <p className="lp-calc-stat-label">Lost every month</p>
             <p className="lp-calc-stat-month">{formatRupeesCompact(monthly)}</p>
           </div>
+          <ValueCompare monthly={monthly} />
           <div className="lp-calc-stat">
             <p className="lp-calc-stat-label">Lost every year</p>
             <p className="lp-calc-stat-year">{formatRupeesCompact(annual)}</p>
@@ -150,7 +192,6 @@ export default function SlippageCalculator({
           <Link href="/signup" className="lp-calc-cta">
             Start tracking for free →
           </Link>
-          {afterResult}
         </div>
       </div>
     </div>
