@@ -1147,6 +1147,30 @@ html:has(.landing-root) {
   padding-top: 1.5rem;
 }
 
+.lp-trial-banner {
+  margin: 0 0 1.5rem;
+  padding: 1.35rem 1.5rem;
+  border-radius: 16px;
+  border: 1px solid var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+.lp-trial-banner p {
+  margin: 0;
+  font-family: var(--lp-serif);
+  font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.lp-trial-banner .lp-trial-banner-sub {
+  margin-top: 0.55rem;
+  font-family: var(--lp-sans);
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
 .lp-pricing-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

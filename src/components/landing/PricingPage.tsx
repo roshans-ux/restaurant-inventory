@@ -17,7 +17,7 @@ const TIERS = [
     blurb: "For bars that want control over their stock.",
     headline: null as string | null,
     subline: null as string | null,
-    cta: { href: "/signup", label: "Sign up" },
+    cta: { href: "/signup", label: "Start free trial" },
     features: [
       { text: "Bottle-level inventory tracking" },
       { text: "Automatic slippage detection (overpour and underpour)" },
@@ -36,7 +36,7 @@ const TIERS = [
     blurb: null,
     headline: "Run your bar's stock from your phone.",
     subline: "BarTally becomes your hub on WhatsApp.",
-    cta: { href: "/signup", label: "Sign up" },
+    cta: { href: "/signup", label: "Start free trial" },
     features: [
       { text: "Everything in Essentials" },
       { text: "Stock forecasting: know what runs out and when" },
@@ -81,6 +81,10 @@ const FAQS = [
   {
     q: "Do I need WhatsApp for Pro?",
     a: "Yes, the owner's WhatsApp number receives updates and approvals.",
+  },
+  {
+    q: "What happens after 31 December?",
+    a: "Nothing is charged automatically. We'll contact you before your trial ends to help you pick a plan. Founding bars lock in Pro at ₹2,999/month for 12 months.",
   },
 ];
 
@@ -159,6 +163,13 @@ export default function PricingPage() {
       </section>
 
       <section className="lp-section lp-pricing-cards-wrap">
+        <div className="lp-trial-banner" data-reveal>
+          <p>Free until 31 December 2026. Every feature, no payment, no card needed.</p>
+          <p className="lp-trial-banner-sub">
+            From 1 January 2027, founding bars get Pro at ₹2,999/month, locked for 12 months, with
+            free setup. First 10 bars only.
+          </p>
+        </div>
         <div className="lp-pricing-grid">
           {TIERS.map((tier, index) => {
             const amount = annual ? tier.annual : tier.monthly;
@@ -223,8 +234,8 @@ export default function PricingPage() {
         <div className="lp-founding">
           <p className="lp-eyebrow">Offer</p>
           <p className="lp-founding-copy">
-            Founding bar offer: Pro at ₹2,999/month, locked for 12 months, with free setup. Limited
-            to our first 10 bars.
+            From 1 January 2027, founding bars get Pro at ₹2,999/month, locked for 12 months, with
+            free setup. First 10 bars only.
           </p>
         </div>
       </section>

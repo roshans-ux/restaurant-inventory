@@ -441,7 +441,7 @@ export default function LandingPage() {
           <Link href="/signup" className="lp-btn lp-btn-primary lp-btn-lg">
             Create your venue
           </Link>
-          <p className="lp-cta-note">Free to start. No credit card required.</p>
+          <p className="lp-cta-note">Free until 31 December 2026. No card needed.</p>
         </div>
       </section>
 
