@@ -997,6 +997,301 @@ html:has(.landing-root) {
   filter: brightness(1.05);
 }
 
+.lp-calc-plans {
+  display: flex;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.lp-nav-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 999px;
+  background: rgba(13, 13, 15, 0.03);
+  color: var(--lp-ink);
+  cursor: pointer;
+}
+
+.lp-mobile-menu {
+  position: fixed;
+  top: var(--lp-nav-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  background: #ffffff;
+  padding: 1.25rem var(--lp-gutter) 2rem;
+  overflow-y: auto;
+}
+
+.lp-mobile-menu nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.lp-mobile-menu a:not(.lp-btn) {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--lp-line);
+  font-family: var(--lp-grotesk);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--lp-ink);
+  text-decoration: none;
+}
+
+.lp-mobile-menu a:not(.lp-btn) sup {
+  font-size: 0.6rem;
+  opacity: 0.5;
+}
+
+.lp-mobile-menu-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+.lp-teaser-card {
+  display: block;
+  margin-top: 0.5rem;
+  padding: 2rem 1.75rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 16px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.lp-teaser-card:hover {
+  border-color: var(--lp-accent);
+  transform: translateY(-2px);
+}
+
+.lp-teaser-card .lp-h2 {
+  font-size: clamp(1.75rem, 3.5vw, 2.6rem);
+}
+
+.lp-teaser-card p {
+  margin: 1rem 0 1.25rem;
+  max-width: 36rem;
+  color: var(--lp-muted);
+  line-height: 1.65;
+}
+
+.lp-pricing-hero {
+  padding-bottom: 2rem;
+}
+
+.lp-pricing-lede {
+  margin: 1.25rem 0 2rem;
+  max-width: 36rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--lp-muted);
+}
+
+.lp-billing {
+  display: inline-flex;
+  padding: 0.25rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 999px;
+  background: rgba(13, 13, 15, 0.03);
+  gap: 0.2rem;
+}
+
+.lp-billing-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.55rem 1.2rem;
+  background: transparent;
+  font-family: var(--lp-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--lp-muted);
+  cursor: pointer;
+}
+
+.lp-billing-btn.is-active {
+  background: var(--lp-accent);
+  color: #14100a;
+}
+
+.lp-billing-note {
+  margin: 0.85rem 0 0;
+  min-height: 1.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--lp-ink);
+}
+
+.lp-pricing-cards-wrap {
+  padding-top: 1.5rem;
+}
+
+.lp-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.lp-price-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.6rem 1.4rem 1.5rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.lp-price-card.is-popular {
+  border-color: var(--lp-accent);
+  box-shadow: 0 18px 40px rgba(245, 166, 35, 0.12);
+}
+
+.lp-price-badge {
+  margin: 0 0 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lp-accent);
+}
+
+.lp-price-card h2 {
+  margin: 0;
+  font-family: var(--lp-serif);
+  font-size: 1.65rem;
+  font-weight: 600;
+}
+
+.lp-price-headline {
+  margin: 0.7rem 0 0;
+  font-family: var(--lp-serif);
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+
+.lp-price-subline,
+.lp-price-blurb {
+  margin: 0.4rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--lp-muted);
+}
+
+.lp-price-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 1.25rem 0 0.35rem;
+  font-family: var(--lp-serif);
+  font-size: clamp(1.8rem, 2.4vw, 2.35rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.lp-price-amount small {
+  font-family: var(--lp-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--lp-muted);
+}
+
+.lp-price-tax {
+  margin: 0 0 1.1rem;
+  font-size: 0.8125rem;
+  color: var(--lp-muted);
+}
+
+.lp-price-card ul {
+  margin: 0 0 1.4rem;
+  padding: 0;
+  list-style: none;
+  flex: 1;
+}
+
+.lp-price-card li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--lp-line);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.lp-soon {
+  font-style: normal;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #14100a;
+  background: var(--lp-accent-soft);
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+}
+
+.lp-price-cta {
+  width: 100%;
+}
+
+.lp-setup-title {
+  font-size: clamp(1.75rem, 3.4vw, 2.6rem);
+}
+
+.lp-setup-lead {
+  margin: 0.85rem 0 1.25rem;
+  font-size: 1.05rem;
+  color: var(--lp-muted);
+}
+
+.lp-setup-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lp-setup-list li {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--lp-line);
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.lp-founding {
+  padding: 1.75rem 1.6rem;
+  border-radius: 16px;
+  border: 1px solid var(--lp-accent);
+  background: var(--lp-accent-soft);
+}
+
+.lp-founding-copy {
+  margin: 0;
+  font-family: var(--lp-serif);
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  line-height: 1.35;
+}
+
+.lp-pricing-worth {
+  margin-top: 0;
+}
+
 /* ---------- footer ---------- */
 
 .lp-footer {
@@ -1119,6 +1414,26 @@ html:has(.landing-root) {
 
 /* ---------- responsive ---------- */
 
+@media (max-width: 1180px) {
+  .lp-nav {
+    grid-template-columns: 1fr auto;
+  }
+
+  .lp-nav-links {
+    display: none;
+  }
+
+  .lp-nav-menu-btn {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 1181px) {
+  .lp-mobile-menu {
+    display: none !important;
+  }
+}
+
 @media (max-width: 960px) {
   .landing-root {
     --lp-gutter: 1.25rem;
@@ -1134,6 +1449,10 @@ html:has(.landing-root) {
 
   .lp-nav-links {
     display: none;
+  }
+
+  .lp-nav-menu-btn {
+    display: inline-flex;
   }
 
   .lp-hero-copy {
@@ -1195,6 +1514,18 @@ html:has(.landing-root) {
 
   .lp-calc-stat-month {
     font-size: 2.5rem;
+  }
+
+  .lp-pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lp-setup-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lp-nav-actions .lp-btn {
+    display: none;
   }
 }
 

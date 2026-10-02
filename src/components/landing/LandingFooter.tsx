@@ -9,7 +9,9 @@ export default function LandingFooter() {
           roshan@bartally.in
         </a>
       </div>
-      <nav className="lp-footer-links" aria-label="Legal">
+      <nav className="lp-footer-links" aria-label="Site">
+        <Link href="/pricing">Pricing</Link>
+        <Link href="/slippage-calculator">Slippage Calculator</Link>
         <Link href="/contact">Contact</Link>
         <Link href="/privacy">Privacy Policy</Link>
       </nav>
