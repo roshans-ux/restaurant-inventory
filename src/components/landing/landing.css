@@ -392,15 +392,9 @@ html:has(.landing-root) {
   text-decoration: none;
 }
 
-.lp-nav-links a:hover {
+.lp-nav-links a:hover,
+.lp-nav-links a.is-current {
   color: var(--lp-accent);
-}
-
-.lp-nav-links sup {
-  font-size: 0.55em;
-  margin-left: 0.2em;
-  vertical-align: super;
-  opacity: 0.55;
 }
 
 .lp-nav-actions {
@@ -1075,9 +1069,8 @@ html:has(.landing-root) {
   text-decoration: none;
 }
 
-.lp-mobile-menu a:not(.lp-btn) sup {
-  font-size: 0.6rem;
-  opacity: 0.5;
+.lp-mobile-menu a:not(.lp-btn).is-current {
+  color: var(--lp-accent);
 }
 
 .lp-mobile-menu-actions {

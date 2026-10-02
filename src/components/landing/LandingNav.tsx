@@ -1,19 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, Wine, X } from "lucide-react";
 
 export const LANDING_NAV = [
-  { href: "/#about", label: "About", num: "01" },
-  { href: "/#how-it-works", label: "How it works", num: "02" },
-  { href: "/#features", label: "Features", num: "03" },
-  { href: "/pricing", label: "Pricing", num: "04" },
-  { href: "/slippage-calculator", label: "Slippage Calculator", num: "05" },
-  { href: "/#faq", label: "FAQ", num: "06" },
+  { href: "/", label: "Home" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/slippage-calculator", label: "Slippage Calculator" },
+  { href: "/contact", label: "Contact" },
 ] as const;
 
-export default function LandingNav({ ariaLabel = "Sections" }: { ariaLabel?: string }) {
+function isCurrentPath(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export default function LandingNav({ ariaLabel = "Site" }: { ariaLabel?: string }) {
+  const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -37,12 +42,19 @@ export default function LandingNav({ ariaLabel = "Sections" }: { ariaLabel?: str
         <span>BarTally</span>
       </Link>
       <nav className="lp-nav-links" aria-label={ariaLabel}>
-        {LANDING_NAV.map((item) => (
-          <Link key={item.href} href={item.href}>
-            {item.label}
-            <sup>{item.num}</sup>
-          </Link>
-        ))}
+        {LANDING_NAV.map((item) => {
+          const current = isCurrentPath(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={current ? "is-current" : undefined}
+              aria-current={current ? "page" : undefined}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
       <nav className="lp-nav-actions">
         <Link href="/login" className="lp-btn lp-btn-ghost">
@@ -68,12 +80,20 @@ export default function LandingNav({ ariaLabel = "Sections" }: { ariaLabel?: str
         hidden={!open}
       >
         <nav aria-label="Mobile">
-          {LANDING_NAV.map((item) => (
-            <Link key={item.href} href={item.href} onClick={() => setOpen(false)}>
-              <sup>{item.num}</sup>
-              {item.label}
-            </Link>
-          ))}
+          {LANDING_NAV.map((item) => {
+            const current = isCurrentPath(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={current ? "is-current" : undefined}
+                aria-current={current ? "page" : undefined}
+                onClick={() => setOpen(false)}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
           <div className="lp-mobile-menu-actions">
             <Link href="/login" className="lp-btn lp-btn-ghost" onClick={() => setOpen(false)}>
               Log in
