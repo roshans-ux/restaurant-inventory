@@ -45,6 +45,14 @@ const STEPS = [
 
 const FEATURES = [
   {
+    title: "Stock forecasting",
+    body: "Know which bottles will run out and when, based on how your bar actually sells. Reorder dates account for each vendor's delivery time.",
+  },
+  {
+    title: "Forecasting from day one",
+    body: "Share your past POS sales and we'll load them in. Your forecasts start working on day one, not after weeks of waiting.",
+  },
+  {
     title: "Low stock alerts",
     body: "Know when a bottle hits your par level before the Friday rush, not after the well runs dry.",
   },
@@ -75,6 +83,11 @@ const FEATURES = [
   {
     title: "Barcode scanner ready",
     body: "Works with any USB barcode scanner out of the box. Storekeepers scan bottles into rotation in seconds.",
+  },
+  {
+    title: "WhatsApp updates",
+    body: "Morning stock updates, order approvals and weekly slippage reports, on the phone you already check.",
+    tag: "Coming soon",
   },
 ];
 
@@ -322,7 +335,15 @@ export default function LandingPage() {
               data-reveal
               style={{ transitionDelay: `${index * 0.1}s` }}
             >
-              <h3>{feature.title}</h3>
+              <h3>
+                {feature.title}
+                {"tag" in feature && feature.tag ? (
+                  <>
+                    {" "}
+                    <em className="lp-soon">{feature.tag}</em>
+                  </>
+                ) : null}
+              </h3>
               <p>{feature.body}</p>
             </article>
           ))}
