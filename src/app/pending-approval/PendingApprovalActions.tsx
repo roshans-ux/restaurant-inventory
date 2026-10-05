@@ -13,6 +13,11 @@ export default function PendingApprovalActions() {
         const res = await fetch("/api/auth/approval-status", { cache: "no-store" });
         const json = await res.json();
         if (cancelled) return;
+        if (json?.data?.cancelled) {
+          setStatus("error");
+          window.location.href = "/account-cancelled";
+          return;
+        }
         if (json?.data?.approved) {
           setStatus("approved");
           window.location.href = "/api/auth/refresh-session?next=/admin";

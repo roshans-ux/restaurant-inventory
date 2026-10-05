@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { buildSessionPayload } from "@/lib/auth/build-session";
+import { buildSessionPayload, destinationAfterAuth } from "@/lib/auth/build-session";
 import {
   createSessionToken,
   getSessionFromRequest,
@@ -24,17 +24,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  const nextParam = request.nextUrl.searchParams.get("next");
-  const next =
-    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")
-      ? nextParam
-      : user.tenant.onboardingCompletedAt && user.emailVerifiedAt
-        ? "/admin"
-        : user.tenant.onboardingCompletedAt
-          ? "/pending-approval"
-          : "/onboarding";
-
   const token = await createSessionToken(buildSessionPayload(user));
+
+  if (user.tenant.cancelledAt) {
+    const response = NextResponse.redirect(new URL("/account-cancelled", request.url));
+    response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+    return response;
+  }
+
+  const nextParam = request.nextUrl.searchParams.get("next");
+  const fallback = destinationAfterAuth(user);
+  const next =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : fallback;
+
   const response = NextResponse.redirect(new URL(next, request.url));
   response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return response;

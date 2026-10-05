@@ -12,7 +12,11 @@ export async function GET(request: NextRequest) {
 
   const user = await prisma.user.findUnique({
     where: { id: session.sub },
-    select: { email: true, emailVerifiedAt: true },
+    select: {
+      email: true,
+      emailVerifiedAt: true,
+      tenant: { select: { cancelledAt: true } },
+    },
   });
 
   if (!user) {
@@ -20,7 +24,8 @@ export async function GET(request: NextRequest) {
   }
 
   return apiOk({
-    approved: user.emailVerifiedAt != null,
+    approved: user.emailVerifiedAt != null && user.tenant.cancelledAt == null,
+    cancelled: user.tenant.cancelledAt != null,
     email: user.email,
     sessionSaysVerified: session.emailVerified,
   });

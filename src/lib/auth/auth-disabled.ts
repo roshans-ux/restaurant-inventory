@@ -25,6 +25,8 @@ export async function getBypassSession(): Promise<SessionPayload | null> {
       tenantName: user.tenant.name,
       onboardingComplete: true,
       emailVerified: true,
+      cancelled: false,
+      iat: Math.floor(Date.now() / 1000),
     };
     return cachedBypass;
   }
@@ -49,6 +51,8 @@ export async function getBypassSession(): Promise<SessionPayload | null> {
     tenantName: tenant.name,
     onboardingComplete: true,
     emailVerified: true,
+    cancelled: false,
+    iat: Math.floor(Date.now() / 1000),
   };
   return cachedBypass;
 }

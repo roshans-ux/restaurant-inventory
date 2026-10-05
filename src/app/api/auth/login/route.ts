@@ -26,6 +26,23 @@ export async function POST(request: NextRequest) {
       return apiError("INVALID_CREDENTIALS", "Invalid email or password", 401);
     }
 
+    if (user.tenant.cancelledAt) {
+      const token = await createSessionToken(buildSessionPayload(user));
+      const response = NextResponse.json(
+        {
+          ok: false,
+          accountCancelled: true,
+          error: {
+            code: "ACCOUNT_CANCELLED",
+            message: "This BarTally account has been cancelled.",
+          },
+        },
+        { status: 403 },
+      );
+      response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+      return response;
+    }
+
     // `emailVerifiedAt` doubles as the approval flag: it is only set by an admin
     // approval, so an unapproved account that has finished onboarding waits, while
     // one that has not gets a session back and resumes onboarding.

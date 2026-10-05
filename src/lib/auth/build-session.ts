@@ -10,7 +10,16 @@ export function buildSessionPayload(user: User & { tenant: Tenant }): SessionPay
     tenantName: user.tenant.name,
     onboardingComplete: user.tenant.onboardingCompletedAt != null,
     emailVerified: user.emailVerifiedAt != null,
+    cancelled: user.tenant.cancelledAt != null,
+    iat: Math.floor(Date.now() / 1000),
   };
+}
+
+export function destinationAfterAuth(user: User & { tenant: Tenant }): string {
+  if (user.tenant.cancelledAt) return "/account-cancelled";
+  if (user.tenant.onboardingCompletedAt && !user.emailVerifiedAt) return "/pending-approval";
+  if (!user.tenant.onboardingCompletedAt) return "/onboarding";
+  return "/admin";
 }
 
 export function slugFromRestaurantName(name: string): string {

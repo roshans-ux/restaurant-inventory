@@ -67,6 +67,7 @@ model Tenant {
   location              String?
   heardAboutUs          String?
   onboardingCompletedAt DateTime?
+  cancelledAt           DateTime?
   posWebhookSecret           String?
   apiKey                     String    @unique @default(uuid())
   slippageTolerancePercent   Int       @default(10)

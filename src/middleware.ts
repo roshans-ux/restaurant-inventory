@@ -4,6 +4,8 @@ import { jwtVerify } from "jose";
 import { isAuthDisabled } from "@/lib/auth/auth-flags";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 
+const SESSION_DB_CHECK_MAX_AGE_SECONDS = 60 * 60 * 24;
+
 function getSecret() {
   const raw =
     process.env.SESSION_SECRET ??
@@ -15,6 +17,8 @@ type SessionClaims = {
   valid: boolean;
   onboardingComplete: boolean;
   emailVerified: boolean;
+  cancelled: boolean;
+  iat: number;
 };
 
 async function getSessionClaims(request: NextRequest): Promise<SessionClaims | null> {
@@ -26,9 +30,11 @@ async function getSessionClaims(request: NextRequest): Promise<SessionClaims | n
       valid: true,
       onboardingComplete: payload.onboardingComplete === true,
       emailVerified: payload.emailVerified === true,
+      cancelled: payload.cancelled === true,
+      iat: typeof payload.iat === "number" ? payload.iat : 0,
     };
   } catch {
-    return { valid: false, onboardingComplete: false, emailVerified: false };
+    return { valid: false, onboardingComplete: false, emailVerified: false, cancelled: false, iat: 0 };
   }
 }
 
@@ -38,6 +44,7 @@ function isPublicPath(pathname: string): boolean {
     pathname === "/signup" ||
     pathname === "/onboarding" ||
     pathname === "/pending-approval" ||
+    pathname === "/account-cancelled" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password"
   ) {
@@ -66,6 +73,7 @@ function isApprovalExempt(pathname: string): boolean {
   return (
     pathname === "/onboarding" ||
     pathname === "/pending-approval" ||
+    pathname === "/account-cancelled" ||
     pathname === "/api/onboarding" ||
     pathname === "/api/auth/logout" ||
     pathname === "/api/auth/approval-status" ||
@@ -83,6 +91,18 @@ function isOnboardingExemptApi(pathname: string): boolean {
 
 function needsAuth(pathname: string): boolean {
   return pathname.startsWith("/admin") || pathname.startsWith("/api/");
+}
+
+function skipSessionDbCheck(pathname: string): boolean {
+  return pathname === "/api/auth/refresh-session" || pathname === "/api/auth/logout";
+}
+
+function refreshSessionUrl(request: NextRequest): URL {
+  const { pathname, search } = request.nextUrl;
+  const next = pathname.startsWith("/api/") ? "/admin" : `${pathname}${search}`;
+  const url = new URL("/api/auth/refresh-session", request.url);
+  url.searchParams.set("next", next.startsWith("/") && !next.startsWith("//") ? next : "/admin");
+  return url;
 }
 
 export async function middleware(request: NextRequest) {
@@ -107,6 +127,7 @@ export async function middleware(request: NextRequest) {
       pathname === "/signup" ||
       pathname === "/onboarding" ||
       pathname === "/pending-approval" ||
+      pathname === "/account-cancelled" ||
       pathname === "/forgot-password" ||
       pathname === "/reset-password"
     ) {
@@ -117,12 +138,22 @@ export async function middleware(request: NextRequest) {
 
   const claims = await getSessionClaims(request);
 
+  if (claims?.valid && !skipSessionDbCheck(pathname)) {
+    const ageSeconds = Math.floor(Date.now() / 1000) - claims.iat;
+    if (claims.iat <= 0 || ageSeconds > SESSION_DB_CHECK_MAX_AGE_SECONDS) {
+      return NextResponse.redirect(refreshSessionUrl(request));
+    }
+  }
+
   if (
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password"
   ) {
+    if (claims?.valid && claims.cancelled) {
+      return NextResponse.redirect(new URL("/account-cancelled", request.url));
+    }
     if (claims?.valid && claims.emailVerified) {
       const dest = claims.onboardingComplete ? "/admin" : "/onboarding";
       return NextResponse.redirect(new URL(dest, request.url));
@@ -137,6 +168,9 @@ export async function middleware(request: NextRequest) {
     if (!claims?.valid) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
+    if (claims.cancelled) {
+      return NextResponse.redirect(new URL("/account-cancelled", request.url));
+    }
     if (claims.onboardingComplete) {
       return NextResponse.redirect(
         new URL(claims.emailVerified ? "/admin" : "/pending-approval", request.url),
@@ -149,11 +183,21 @@ export async function middleware(request: NextRequest) {
     if (!claims?.valid) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
+    if (claims.cancelled) {
+      return NextResponse.redirect(new URL("/account-cancelled", request.url));
+    }
     if (claims.emailVerified) {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
     if (!claims.onboardingComplete) {
       return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  if (pathname === "/account-cancelled") {
+    if (!claims?.valid) {
+      return NextResponse.redirect(new URL("/login", request.url));
     }
     return NextResponse.next();
   }
@@ -172,6 +216,22 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (claims.cancelled) {
+    if (isApprovalExempt(pathname)) {
+      return NextResponse.next();
+    }
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "ACCOUNT_CANCELLED", message: "This account has been cancelled" },
+        },
+        { status: 403 },
+      );
+    }
+    return NextResponse.redirect(new URL("/account-cancelled", request.url));
   }
 
   if (!claims.emailVerified && claims.onboardingComplete) {

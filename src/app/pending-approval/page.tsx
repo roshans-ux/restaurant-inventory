@@ -26,6 +26,10 @@ export default async function PendingApprovalPage() {
     redirect("/login");
   }
 
+  if (user.tenant.cancelledAt) {
+    redirect("/account-cancelled");
+  }
+
   if (user.emailVerifiedAt) {
     redirect("/api/auth/refresh-session?next=/admin");
   }

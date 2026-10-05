@@ -12,6 +12,8 @@ export type SessionPayload = {
   tenantName: string;
   onboardingComplete: boolean;
   emailVerified: boolean;
+  cancelled: boolean;
+  iat: number;
 };
 
 function getSecret() {
@@ -25,7 +27,8 @@ function getSecret() {
 }
 
 export async function createSessionToken(payload: SessionPayload): Promise<string> {
-  return new SignJWT({ ...payload })
+  const { iat: _issuedAt, ...claims } = payload;
+  return new SignJWT({ ...claims })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -36,6 +39,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
   try {
     const { payload } = await jwtVerify(token, getSecret());
     if (!payload.sub || !payload.tenantId || !payload.email) return null;
+    const iat = typeof payload.iat === "number" ? payload.iat : 0;
     return {
       sub: String(payload.sub),
       tenantId: String(payload.tenantId),
@@ -44,6 +48,8 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       tenantName: String(payload.tenantName ?? "Venue"),
       onboardingComplete: payload.onboardingComplete === true,
       emailVerified: payload.emailVerified === true,
+      cancelled: payload.cancelled === true,
+      iat,
     };
   } catch {
     return null;

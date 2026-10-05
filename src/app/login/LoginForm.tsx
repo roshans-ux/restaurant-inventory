@@ -42,6 +42,11 @@ export default function LoginForm() {
         );
       }
       if (!res.ok) {
+        if (data.error?.code === "ACCOUNT_CANCELLED") {
+          router.replace("/account-cancelled");
+          router.refresh();
+          return;
+        }
         if (data.error?.code === "PENDING_APPROVAL") {
           router.replace("/pending-approval");
           router.refresh();
