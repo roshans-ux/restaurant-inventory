@@ -10,10 +10,6 @@ export default function LandingFooter() {
         </a>
       </div>
       <nav className="lp-footer-links" aria-label="Site">
-        <Link href="/">Home</Link>
-        <Link href="/pricing">Pricing</Link>
-        <Link href="/slippage-calculator">Slippage Calculator</Link>
-        <Link href="/contact">Contact</Link>
         <Link href="/privacy">Privacy Policy</Link>
         <Link href="/terms">Terms and conditions</Link>
         <Link href="/refunds">Refund and cancellation policy</Link>
