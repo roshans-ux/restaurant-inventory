@@ -15,6 +15,9 @@ export default function LandingFooter() {
         <Link href="/slippage-calculator">Slippage Calculator</Link>
         <Link href="/contact">Contact</Link>
         <Link href="/privacy">Privacy Policy</Link>
+        <Link href="/terms">Terms and conditions</Link>
+        <Link href="/refunds">Refund and cancellation policy</Link>
+        <Link href="/delivery">Delivery policy</Link>
       </nav>
     </footer>
   );

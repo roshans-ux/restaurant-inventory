@@ -3,7 +3,7 @@ import LandingSiteChrome from "@/components/landing/LandingSiteChrome";
 
 export const metadata: Metadata = {
   title: "Contact",
-  description: "Contact BarTally — address and email.",
+  description: "Contact BarTally. Address and email.",
 };
 
 export default function ContactPage() {
@@ -16,10 +16,7 @@ export default function ContactPage() {
         <dl className="lp-legal-dl">
           <div>
             <dt>Address</dt>
-            <dd>
-              Flat No. 22, Narturanga Building, Sector 5, Srishti Complex, Near ICICI Bank, Mira
-              Road East, Thane, Maharashtra 401107
-            </dd>
+            <dd>Mira Road East, Thane, Maharashtra 401107</dd>
           </div>
           <div>
             <dt>Email</dt>
