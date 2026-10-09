@@ -1,6 +1,6 @@
 import { formatCategoryBottleSizeLabel, isKnownCategoryBottleSize } from "@/lib/product-category";
 
-export const BEER_BOTTLE_SIZES_ML = [330, 650] as const;
+export const BEER_BOTTLE_SIZES_ML = [330, 500, 650] as const;
 
 export const BOTTLE_SIZE_OPTIONS = [
   { label: "330ml", ml: 330 },

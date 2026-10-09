@@ -30,7 +30,7 @@ export const PRODUCT_CATEGORY_PILL: Record<
 export const CATEGORY_BOTTLE_SIZES_ML: Record<ProductCategory, readonly number[]> = {
   SPIRIT: [750, 1000, 1750, 2000],
   WINE: [375, 750],
-  BOTTLED_BEER: [330, 650],
+  BOTTLED_BEER: [330, 500, 650],
   DRAFT_BEER: [20000, 30000, 50000],
   CIDER: [330, 500, 650],
 };
