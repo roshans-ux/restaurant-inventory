@@ -16,7 +16,10 @@ export default function ContactPage() {
         <dl className="lp-legal-dl">
           <div>
             <dt>Address</dt>
-            <dd>Mira Road East, Thane, Maharashtra 401107</dd>
+            <dd>
+              Flat No. 22, Narturanga Building, Sector 5, Srishti Complex, Near ICICI Bank, Mira
+              Road East, Thane, Maharashtra 401107
+            </dd>
           </div>
           <div>
             <dt>Email</dt>

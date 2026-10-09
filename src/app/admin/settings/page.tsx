@@ -127,6 +127,10 @@ export default function SettingsPage() {
   const [whatsappFlagsBusy, setWhatsappFlagsBusy] = useState(false);
   const [vendorLeadDays, setVendorLeadDays] = useState("2");
   const [editVendorLeadDays, setEditVendorLeadDays] = useState("2");
+  const [cancelConfirming, setCancelConfirming] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
+  const [cancelError, setCancelError] = useState("");
 
   async function loadAll() {
     const [meRes, vendorsRes, waRes] = await Promise.all([
@@ -575,6 +579,27 @@ export default function SettingsPage() {
       setVendorError(err instanceof Error ? err.message : "Failed to update vendor");
     } finally {
       setSavingVendor(false);
+    }
+  }
+
+  async function requestCancellation() {
+    setCancelBusy(true);
+    setCancelError("");
+    try {
+      const res = await fetch("/api/account/cancel-request", { method: "POST" });
+      const data = await readJsonResponse<{
+        ok?: boolean;
+        error?: { message?: string };
+      }>(res);
+      if (!res.ok || data.ok === false) {
+        throw new Error(getApiErrorMessage(data, "Could not send the cancellation request."));
+      }
+      setCancelRequested(true);
+      setCancelConfirming(false);
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "Could not send the cancellation request.");
+    } finally {
+      setCancelBusy(false);
     }
   }
 
@@ -1278,6 +1303,68 @@ export default function SettingsPage() {
                 {addingVendor ? "Adding…" : "Add Vendor"}
               </button>
             </form>
+          </div>
+          <div
+            className="rounded-xl p-5 space-y-3"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-sm font-medium">Cancel subscription</p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Cancelling stops your paid plan at the end of the period you&apos;ve paid for. During
+              the free trial, your account stays active until 31 December 2026.
+            </p>
+            {cancelRequested ? (
+              <p className="text-sm" style={{ color: "var(--green)" }}>
+                Cancellation requested. Check your email.
+              </p>
+            ) : cancelConfirming ? (
+              <div className="space-y-3">
+                <p className="text-sm" style={{ color: "var(--text-primary)" }}>
+                  Are you sure? You&apos;ll keep access until your paid period ends.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={cancelBusy}
+                    onClick={() => void requestCancellation()}
+                    className="rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+                    style={{ background: "var(--red)", color: "#fff" }}
+                  >
+                    {cancelBusy ? "Sending…" : "Yes, cancel"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={cancelBusy}
+                    onClick={() => {
+                      setCancelConfirming(false);
+                      setCancelError("");
+                    }}
+                    className="rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+                    style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+                  >
+                    Keep my plan
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={cancelRequested}
+                onClick={() => {
+                  setCancelConfirming(true);
+                  setCancelError("");
+                }}
+                className="rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+                style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}
+              >
+                Cancel subscription
+              </button>
+            )}
+            {cancelError ? (
+              <p className="text-xs" style={{ color: "var(--red)" }}>
+                {cancelError}
+              </p>
+            ) : null}
           </div>
         </div>
       )}

@@ -38,7 +38,8 @@ export default function RefundsPage() {
 
         <h2>Your data after cancellation</h2>
         <p>
-          After cancellation, your data stays available to download for 90 days, then it is deleted.
+          After cancellation, we keep your data for 90 days. Email us during that time and we&apos;ll
+          send you a copy. After 90 days it is deleted.
         </p>
 
         <h2>Contact</h2>
