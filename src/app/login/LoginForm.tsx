@@ -31,6 +31,7 @@ export default function LoginForm() {
         error?: { message?: string; code?: string };
         ok?: boolean;
         needsOnboarding?: boolean;
+        needsPayment?: boolean;
       } = {};
       try {
         data = raw ? JSON.parse(raw) : {};
@@ -56,7 +57,9 @@ export default function LoginForm() {
           data.error?.message ?? data.error?.code ?? "Login failed",
         );
       }
-      if (data.needsOnboarding) {
+      if (data.needsPayment) {
+        router.replace("/signup?pay=1");
+      } else if (data.needsOnboarding) {
         router.replace("/onboarding");
       } else {
         router.replace(next.startsWith("/") ? next : "/admin");

@@ -462,7 +462,7 @@ export default function LandingPage() {
           <Link href="/signup" className="lp-btn lp-btn-primary lp-btn-lg">
             Create your venue
           </Link>
-          <p className="lp-cta-note">Free until 31 December 2026. No card needed.</p>
+          <p className="lp-cta-note">Free until 31 December 2026. Pilot prices locked for 12 months.</p>
         </div>
       </section>
 

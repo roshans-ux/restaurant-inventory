@@ -28,6 +28,10 @@ type TenantInfo = {
   whatsappUpdates?: boolean;
   whatsappOrderApproval?: boolean;
   whatsappEnabled?: boolean;
+  plan?: "ESSENTIALS" | "PRO" | "CHAINS";
+  outlets?: number;
+  setupFeeWaived?: boolean;
+  monthlyPriceFromJanuary?: number;
 };
 
 type Vendor = {
@@ -162,6 +166,10 @@ export default function SettingsPage() {
         whatsappUpdates: Boolean(t.whatsappUpdates),
         whatsappOrderApproval: Boolean(t.whatsappOrderApproval),
         whatsappEnabled: Boolean(t.whatsappEnabled),
+        plan: t.plan,
+        outlets: t.outlets,
+        setupFeeWaived: Boolean(t.setupFeeWaived),
+        monthlyPriceFromJanuary: t.monthlyPriceFromJanuary,
       });
       setAdminWhatsapp(t.adminWhatsappNumber ?? "");
       setWhatsappConnected(Boolean(t.whatsappConnected));
@@ -1303,6 +1311,34 @@ export default function SettingsPage() {
                 {addingVendor ? "Adding…" : "Add Vendor"}
               </button>
             </form>
+          </div>
+          <div
+            className="rounded-xl p-5 space-y-3"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-sm font-medium">Plan and billing</p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              {tenant.plan === "CHAINS"
+                ? `Chains · ${tenant.outlets ?? 1} outlet${(tenant.outlets ?? 1) === 1 ? "" : "s"}`
+                : tenant.plan === "ESSENTIALS"
+                  ? "Essentials"
+                  : "Pro"}
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Free until 31 December 2026
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              ₹{(tenant.monthlyPriceFromJanuary ?? 0).toLocaleString("en-IN")} / month from 1 January
+              {tenant.plan === "CHAINS" ? " (all outlets)" : ""}
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Price locked until 31 December 2027
+            </p>
+            {tenant.setupFeeWaived ? (
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                Founding bar: setup waived
+              </p>
+            ) : null}
           </div>
           <div
             className="rounded-xl p-5 space-y-3"

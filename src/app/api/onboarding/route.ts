@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
     user.tenant = updatedTenant;
 
     const signedUpAtIst = formatSignedUpAtIST(completedAt);
+    const foundingYesNo = updatedTenant.setupFeeWaived || updatedTenant.foundingCode ? "yes" : "no";
     const betaDetails = {
       restaurantName,
       location,
@@ -69,6 +70,9 @@ export async function POST(request: NextRequest) {
       phone: user.phone,
       heardAboutUs: parsed.heardAboutUs,
       signedUpAtIst,
+      plan: updatedTenant.plan,
+      founding: foundingYesNo,
+      paymentStatus: updatedTenant.billingStatus,
     };
 
     const rawApprovalToken = await createAuthToken(user.id, "ACCOUNT_APPROVAL");
@@ -83,6 +87,9 @@ export async function POST(request: NextRequest) {
           phone: user.phone,
           heardAboutUs: parsed.heardAboutUs,
           signedUpAt: signedUpAtIst,
+          plan: updatedTenant.plan,
+          founding: foundingYesNo,
+          paymentStatus: updatedTenant.billingStatus,
         }).catch((err) => {
           console.error("[onboarding] Beta Signups sheet append failed:", err);
           throw err;

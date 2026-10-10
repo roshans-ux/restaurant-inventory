@@ -9,6 +9,9 @@ export type BetaSignupAlertDetails = {
   phone: string;
   heardAboutUs: string;
   signedUpAtIst: string;
+  plan: string;
+  founding: string;
+  paymentStatus: string;
 };
 
 export function getAdminAlertEmail(): string {
@@ -27,9 +30,9 @@ export async function sendBetaSignupAlertEmail(
   const approveUrl = buildApprovalUrl(request, rawApprovalToken);
   const to = getAdminAlertEmail();
 
-  const subject = `Beta signup: ${details.restaurantName}`;
+  const subject = `BarTally signup: ${details.restaurantName}`;
   const text = [
-    "New beta signup — approve to activate their account.",
+    "New BarTally signup. Trial accounts are active without a manual approve click.",
     "",
     `Restaurant: ${details.restaurantName}`,
     `Location: ${details.location}`,
@@ -37,13 +40,16 @@ export async function sendBetaSignupAlertEmail(
     `Phone: ${details.phone}`,
     `How they heard about us: ${details.heardAboutUs}`,
     `Signed up at (IST): ${details.signedUpAtIst}`,
+    `Plan: ${details.plan}`,
+    `Founding: ${details.founding}`,
+    `Payment status: ${details.paymentStatus}`,
     "",
-    `Approve: ${approveUrl}`,
+    `Approve link (only needed for older pending accounts): ${approveUrl}`,
   ].join("\n");
 
   const html = `
-    <h2>New beta signup</h2>
-    <p>Approve to set <code>emailVerifiedAt</code> on their account (they can then use the app).</p>
+    <h2>New BarTally signup</h2>
+    <p>Trial accounts are active without a manual approve click. The approve link remains for older pending accounts.</p>
     <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;">
       <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Restaurant</td><td>${escapeHtml(details.restaurantName)}</td></tr>
       <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Location</td><td>${escapeHtml(details.location)}</td></tr>
@@ -51,6 +57,9 @@ export async function sendBetaSignupAlertEmail(
       <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Phone</td><td>${escapeHtml(details.phone)}</td></tr>
       <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Heard about us</td><td>${escapeHtml(details.heardAboutUs)}</td></tr>
       <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Signed up at (IST)</td><td>${escapeHtml(details.signedUpAtIst)}</td></tr>
+      <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Plan</td><td>${escapeHtml(details.plan)}</td></tr>
+      <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Founding</td><td>${escapeHtml(details.founding)}</td></tr>
+      <tr><td style="padding:6px 12px 6px 0;font-weight:600;">Payment status</td><td>${escapeHtml(details.paymentStatus)}</td></tr>
     </table>
     <p style="margin-top:24px;">
       <a href="${approveUrl}" style="display:inline-block;background:#c9a227;color:#0e0e11;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;">

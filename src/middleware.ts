@@ -18,6 +18,7 @@ type SessionClaims = {
   onboardingComplete: boolean;
   emailVerified: boolean;
   cancelled: boolean;
+  paymentPending: boolean;
   iat: number;
 };
 
@@ -31,10 +32,18 @@ async function getSessionClaims(request: NextRequest): Promise<SessionClaims | n
       onboardingComplete: payload.onboardingComplete === true,
       emailVerified: payload.emailVerified === true,
       cancelled: payload.cancelled === true,
+      paymentPending: payload.paymentPending === true,
       iat: typeof payload.iat === "number" ? payload.iat : 0,
     };
   } catch {
-    return { valid: false, onboardingComplete: false, emailVerified: false, cancelled: false, iat: 0 };
+    return {
+      valid: false,
+      onboardingComplete: false,
+      emailVerified: false,
+      cancelled: false,
+      paymentPending: false,
+      iat: 0,
+    };
   }
 }
 
@@ -85,7 +94,18 @@ function isOnboardingExemptApi(pathname: string): boolean {
   return (
     pathname === "/api/onboarding" ||
     pathname === "/api/auth/me" ||
-    pathname === "/api/auth/logout"
+    pathname === "/api/auth/logout" ||
+    pathname.startsWith("/api/billing/")
+  );
+}
+
+function isPaymentExempt(pathname: string): boolean {
+  return (
+    pathname === "/signup" ||
+    pathname === "/api/auth/logout" ||
+    pathname === "/api/auth/me" ||
+    pathname === "/api/auth/signup" ||
+    pathname.startsWith("/api/billing/")
   );
 }
 
@@ -154,6 +174,12 @@ export async function middleware(request: NextRequest) {
     if (claims?.valid && claims.cancelled) {
       return NextResponse.redirect(new URL("/account-cancelled", request.url));
     }
+    if (claims?.valid && claims.paymentPending) {
+      if (pathname === "/signup") {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/signup?pay=1", request.url));
+    }
     if (claims?.valid && claims.emailVerified) {
       const dest = claims.onboardingComplete ? "/admin" : "/onboarding";
       return NextResponse.redirect(new URL(dest, request.url));
@@ -171,6 +197,9 @@ export async function middleware(request: NextRequest) {
     if (claims.cancelled) {
       return NextResponse.redirect(new URL("/account-cancelled", request.url));
     }
+    if (claims.paymentPending) {
+      return NextResponse.redirect(new URL("/signup?pay=1", request.url));
+    }
     if (claims.onboardingComplete) {
       return NextResponse.redirect(
         new URL(claims.emailVerified ? "/admin" : "/pending-approval", request.url),
@@ -185,6 +214,9 @@ export async function middleware(request: NextRequest) {
     }
     if (claims.cancelled) {
       return NextResponse.redirect(new URL("/account-cancelled", request.url));
+    }
+    if (claims.paymentPending) {
+      return NextResponse.redirect(new URL("/signup?pay=1", request.url));
     }
     if (claims.emailVerified) {
       return NextResponse.redirect(new URL("/admin", request.url));
@@ -232,6 +264,22 @@ export async function middleware(request: NextRequest) {
       );
     }
     return NextResponse.redirect(new URL("/account-cancelled", request.url));
+  }
+
+  if (claims.paymentPending) {
+    if (isPaymentExempt(pathname)) {
+      return NextResponse.next();
+    }
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "PAYMENT_PENDING", message: "Finish payment to start your trial" },
+        },
+        { status: 403 },
+      );
+    }
+    return NextResponse.redirect(new URL("/signup?pay=1", request.url));
   }
 
   if (!claims.emailVerified && claims.onboardingComplete) {

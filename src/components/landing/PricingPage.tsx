@@ -4,20 +4,18 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-type Billing = "monthly" | "annual";
-
 const TIERS = [
   {
     id: "essentials",
     name: "Essentials",
     popular: false,
-    monthly: 1999,
-    annual: 19990,
+    monthly: 999,
+    standard: 1999,
     perOutlet: false,
     blurb: "For bars that want control over their stock.",
     headline: null as string | null,
     subline: null as string | null,
-    cta: { href: "/signup", label: "Start free trial" },
+    cta: { href: "/signup?plan=essentials", label: "Start free trial" },
     features: [
       { text: "Bottle-level inventory tracking" },
       { text: "Automatic slippage detection (overpour and underpour)" },
@@ -30,13 +28,13 @@ const TIERS = [
     id: "pro",
     name: "Pro",
     popular: true,
-    monthly: 3999,
-    annual: 39990,
+    monthly: 1299,
+    standard: 3999,
     perOutlet: false,
     blurb: null,
     headline: "Run your bar's stock from your phone.",
     subline: "BarTally becomes your hub on WhatsApp.",
-    cta: { href: "/signup", label: "Start free trial" },
+    cta: { href: "/signup?plan=pro", label: "Start free trial" },
     features: [
       { text: "Everything in Essentials" },
       { text: "Stock forecasting: know what runs out and when" },
@@ -50,13 +48,13 @@ const TIERS = [
     id: "chains",
     name: "Chains",
     popular: false,
-    monthly: 3499,
-    annual: 34990,
+    monthly: 1599,
+    standard: 3499,
     perOutlet: true,
     blurb: "For 3 or more outlets.",
     headline: null,
     subline: null,
-    cta: { href: "/contact", label: "Contact us" },
+    cta: { href: "/signup?plan=chains", label: "Start free trial" },
     features: [
       { text: "Pro for every outlet" },
       { text: "Group view across all outlets", tag: "Coming soon" },
@@ -72,7 +70,7 @@ const FAQS = [
   },
   {
     q: "What does setup include?",
-    a: "Bottle catalog, vendors, POS mapping, and past sales import. We set everything up for you.",
+    a: "Bottle catalog, vendors, POS mapping, and past sales import. We set everything up for you. Pilot setup is ₹4,999 (usually ₹7,500). Founding bars have setup waived.",
   },
   {
     q: "Can I switch plans later?",
@@ -84,7 +82,11 @@ const FAQS = [
   },
   {
     q: "What happens after 31 December?",
-    a: "Nothing is charged automatically. We'll contact you before your trial ends to help you pick a plan. Founding bars lock in Pro at ₹2,999/month for 12 months.",
+    a: "Your first monthly charge is on 1 January 2027, at the pilot price shown on this page. That price is locked for 12 monthly charges. Founding bars pay ₹999/month on any plan from 1 January 2027, with setup waived.",
+  },
+  {
+    q: "How do founding bars sign up?",
+    a: "Enter a valid founding bar code on the signup form. Setup is waived and there is no payment at signup. Pilot prices on this page apply when you do not have a code.",
   },
 ];
 
@@ -93,7 +95,6 @@ function inr(n: number): string {
 }
 
 export default function PricingPage() {
-  const [billing, setBilling] = useState<Billing>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [ready, setReady] = useState(false);
 
@@ -118,8 +119,6 @@ export default function PricingPage() {
     return () => observer.disconnect();
   }, []);
 
-  const annual = billing === "annual";
-
   return (
     <div className={`lp-pricing-page${ready ? " is-ready" : ""}`}>
       <section className="lp-section lp-pricing-hero">
@@ -130,56 +129,22 @@ export default function PricingPage() {
           Plans for a tighter bar.
         </h1>
         <p className="lp-pricing-lede" data-reveal>
-          Simple monthly or annual billing. The number on the card is what you pay.
+          Free until 31 December 2026. Pilot prices locked for 12 months from 1 January 2027.
         </p>
-
-        <div className="lp-billing" data-reveal role="group" aria-label="Billing period">
-          <button
-            type="button"
-            className={`lp-billing-btn${billing === "monthly" ? " is-active" : ""}`}
-            aria-pressed={billing === "monthly"}
-            onClick={() => setBilling("monthly")}
-          >
-            Monthly
-          </button>
-          <button
-            type="button"
-            className={`lp-billing-btn${annual ? " is-active" : ""}`}
-            aria-pressed={annual}
-            onClick={() => setBilling("annual")}
-          >
-            Annual
-          </button>
-        </div>
-        {annual ? (
-          <p className="lp-billing-note" data-reveal>
-            Pay for 10 months, get 12
-          </p>
-        ) : (
-          <p className="lp-billing-note lp-billing-note-spacer" aria-hidden>
-            &nbsp;
-          </p>
-        )}
       </section>
 
       <section className="lp-section lp-pricing-cards-wrap">
         <div className="lp-trial-banner" data-reveal>
-          <p>Free until 31 December 2026. Every feature, no payment, no card needed.</p>
+          <p>Free until 31 December 2026. Every feature during the trial.</p>
           <p className="lp-trial-banner-sub">
-            From 1 January 2027, founding bars get Pro at ₹2,999/month, locked for 12 months, with
-            free setup. First 10 bars only.
+            Pilot setup ₹4,999 (usually ₹7,500), waived for founding bars. Pilot prices locked for
+            12 months. Founding bars pay ₹999/month on any plan from 1 January 2027, with no
+            payment at signup.
           </p>
         </div>
         <div className="lp-pricing-grid">
           {TIERS.map((tier, index) => {
-            const amount = annual ? tier.annual : tier.monthly;
-            const period = annual
-              ? tier.perOutlet
-                ? "/outlet/year"
-                : "/year"
-              : tier.perOutlet
-                ? "/outlet/month"
-                : "/month";
+            const period = tier.perOutlet ? "/outlet/month" : "/month";
             return (
               <article
                 key={tier.id}
@@ -193,10 +158,11 @@ export default function PricingPage() {
                 {tier.subline ? <p className="lp-price-subline">{tier.subline}</p> : null}
                 {tier.blurb ? <p className="lp-price-blurb">{tier.blurb}</p> : null}
                 <p className="lp-price-amount">
-                  <span>{inr(amount)}</span>
+                  <s className="lp-price-was">{inr(tier.standard)}</s>
+                  <span>{inr(tier.monthly)}</span>
                   <small>{period}</small>
                 </p>
-                <p className="lp-price-tax">All taxes included</p>
+                <p className="lp-price-tax">All taxes included. Pilot price locked for 12 months.</p>
                 <ul>
                   {tier.features.map((feature) => (
                     <li key={feature.text}>
@@ -220,7 +186,9 @@ export default function PricingPage() {
       </section>
 
       <section className="lp-section lp-setup" data-reveal>
-        <h2 className="lp-h2 lp-setup-title">One-time setup: ₹7,500. Free on annual plans.</h2>
+        <h2 className="lp-h2 lp-setup-title">
+          Pilot setup ₹4,999 (usually ₹7,500), waived for founding bars
+        </h2>
         <p className="lp-setup-lead">We set everything up for you.</p>
         <ul className="lp-setup-list">
           <li>Bottle catalog</li>

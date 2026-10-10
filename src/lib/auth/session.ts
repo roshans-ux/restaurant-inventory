@@ -13,6 +13,7 @@ export type SessionPayload = {
   onboardingComplete: boolean;
   emailVerified: boolean;
   cancelled: boolean;
+  paymentPending: boolean;
   iat: number;
 };
 
@@ -49,6 +50,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
       onboardingComplete: payload.onboardingComplete === true,
       emailVerified: payload.emailVerified === true,
       cancelled: payload.cancelled === true,
+      paymentPending: payload.paymentPending === true,
       iat,
     };
   } catch {

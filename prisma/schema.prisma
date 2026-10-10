@@ -20,6 +20,20 @@ enum AuthTokenType {
   ACCOUNT_APPROVAL
 }
 
+enum BillingPlan {
+  ESSENTIALS
+  PRO
+  CHAINS
+}
+
+enum BillingStatus {
+  TRIAL
+  PAYMENT_PENDING
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
 enum StockMovementType {
   OPENING_BALANCE
   RECEIVE
@@ -68,6 +82,14 @@ model Tenant {
   heardAboutUs          String?
   onboardingCompletedAt DateTime?
   cancelledAt           DateTime?
+  plan                     BillingPlan    @default(ESSENTIALS)
+  outlets                  Int            @default(1)
+  foundingCode             String?
+  setupFeeWaived           Boolean        @default(false)
+  trialEndsAt              DateTime       @default("2026-12-31T18:29:59.000Z")
+  priceLockedUntil         DateTime?
+  razorpaySubscriptionId   String?
+  billingStatus            BillingStatus  @default(TRIAL)
   posWebhookSecret           String?
   apiKey                     String    @unique @default(uuid())
   slippageTolerancePercent   Int       @default(10)

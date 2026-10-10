@@ -32,6 +32,12 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
+  if (user.tenant.billingStatus === "PAYMENT_PENDING") {
+    const response = NextResponse.redirect(new URL("/signup?pay=1", request.url));
+    response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+    return response;
+  }
+
   const nextParam = request.nextUrl.searchParams.get("next");
   const fallback = destinationAfterAuth(user);
   const next =

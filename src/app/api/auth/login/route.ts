@@ -43,9 +43,21 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    // `emailVerifiedAt` doubles as the approval flag: it is only set by an admin
-    // approval, so an unapproved account that has finished onboarding waits, while
-    // one that has not gets a session back and resumes onboarding.
+    if (user.tenant.billingStatus === "PAYMENT_PENDING") {
+      const token = await createSessionToken(buildSessionPayload(user));
+      const response = NextResponse.json({
+        ok: true,
+        needsPayment: true,
+        needsOnboarding: true,
+        user: { email: user.email },
+      });
+      response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+      return response;
+    }
+
+    // `emailVerifiedAt` is still the gate for app access. TRIAL signups set it
+    // automatically (founding at create, pilots after verified Razorpay payment).
+    // Older accounts still wait on admin approval when onboarding is done.
     if (!user.emailVerifiedAt && user.tenant.onboardingCompletedAt != null) {
       return apiError(
         "PENDING_APPROVAL",

@@ -4,9 +4,9 @@ Use a single spreadsheet with one tab: **Beta Signups**. Delete the old **Waitli
 
 ## Tab headers (row 1)
 
-| A | B | C | D | E | F | G |
-|---|---|---|---|---|---|---|
-| Restaurant name | Location | Email | Phone number | How they heard about us | Signed up at | Approved |
+| A | B | C | D | E | F | G | H | I | J |
+|---|---|---|---|---|---|---|---|---|---|
+| Restaurant name | Location | Email | Phone number | How they heard about us | Signed up at | Plan | Founding | Payment status | Approved |
 
 ## Apps Script (replace your entire `doPost`)
 
@@ -29,7 +29,7 @@ function doPost(e) {
     for (let i = 1; i < data.length; i++) {
       const rowEmail = String(data[i][2] || "").toLowerCase().trim();
       if (rowEmail === target) {
-        sheet.getRange(i + 1, 7).setValue(body.approved || "Yes");
+        sheet.getRange(i + 1, 10).setValue(body.approved || "Yes");
         updated = true;
         break;
       }

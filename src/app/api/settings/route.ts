@@ -9,6 +9,7 @@ import { INDIAN_PHONE_ERROR, normalizeIndianPhone } from "@/lib/phone-in";
 import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
 import { isWhatsAppEnabled } from "@/lib/whatsapp/enabled";
 import { revalidateForecastCache } from "@/lib/forecast/cache";
+import { monthlyPriceFromJanuaryInr } from "@/lib/billing/constants";
 
 const timeSchema = z.union([
   z.string().regex(/^\d{2}:\d{2}$/),
@@ -61,6 +62,12 @@ export async function GET(request: NextRequest) {
         forecastSafetyDays: true,
         whatsappUpdates: true,
         whatsappOrderApproval: true,
+        plan: true,
+        outlets: true,
+        setupFeeWaived: true,
+        trialEndsAt: true,
+        priceLockedUntil: true,
+        billingStatus: true,
       },
     });
     if (!tenant) {
@@ -82,6 +89,11 @@ export async function GET(request: NextRequest) {
       shiftSchedule: parseShiftSchedule(tenant.shiftSchedule),
       whatsappConnected: isWhatsAppConfigured(),
       whatsappEnabled: isWhatsAppEnabled(),
+      monthlyPriceFromJanuary: monthlyPriceFromJanuaryInr({
+        plan: tenant.plan,
+        outlets: tenant.outlets,
+        setupFeeWaived: tenant.setupFeeWaived,
+      }),
     });
   } catch (error) {
     return apiError("SETTINGS_FETCH_FAILED", "Failed to fetch settings", 500, {

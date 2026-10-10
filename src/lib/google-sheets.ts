@@ -5,6 +5,9 @@ export type BetaSignupSheetRow = {
   phone: string;
   heardAboutUs: string;
   signedUpAt: string;
+  plan: string;
+  founding: string;
+  paymentStatus: string;
 };
 
 const BETA_SIGNUPS_TAB = "Beta Signups";
@@ -45,6 +48,9 @@ export async function appendBetaSignupRow(row: BetaSignupSheetRow): Promise<{ ok
       row.phone,
       row.heardAboutUs,
       row.signedUpAt,
+      row.plan,
+      row.founding,
+      row.paymentStatus,
       "",
     ],
   });
